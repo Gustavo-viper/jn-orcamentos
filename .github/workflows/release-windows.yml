@@ -28,6 +28,16 @@ jobs:
         shell: pwsh
         run: npm version "1.1.${{ github.run_number }}" --no-git-tag-version
 
+      - name: Create version tag for GitHub release
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          git tag -a $tag -m "Release $tag"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git push origin "refs/tags/$tag"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build and publish installer and update manifest
         run: npm run desktop:publish
         env:
