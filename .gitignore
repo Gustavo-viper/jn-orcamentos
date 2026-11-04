@@ -1,0 +1,9 @@
+node_modules/
+dist/
+outputs/
+.electron-cache/
+.electron-builder-cache/
+.localappdata/
+.npm-cache/
+tmp-print-check/
+*.log

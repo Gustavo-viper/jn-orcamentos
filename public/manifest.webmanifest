@@ -1,0 +1,11 @@
+{
+  "name": "J&N Decorações em Gesso",
+  "short_name": "J&N Gesso",
+  "description": "Sistema de gestão de orçamentos, obras, estoque e financeiro da J&N Decorações em Gesso.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f1ea",
+  "theme_color": "#4a2c1a",
+  "lang": "pt-BR",
+  "icons": []
+}

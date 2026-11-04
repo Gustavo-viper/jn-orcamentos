@@ -1,0 +1,82 @@
+{
+  "name": "react-vite-tailwind",
+  "description": "App offline-first de orçamentos da J&N Decorações em Gesso",
+  "author": "J&N Decorações em Gesso",
+  "private": true,
+  "version": "1.0.3",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "desktop:dev": "npm run build -- --configLoader runner && electron .",
+    "desktop:package": "node scripts/create-ico.mjs && npm run build -- --configLoader runner && electron-builder --win nsis --x64",
+    "desktop:publish": "node scripts/create-ico.mjs && npm run build -- --configLoader runner && electron-builder --win nsis --x64 --publish always"
+  },
+  "dependencies": {
+    "clsx": "2.1.1",
+    "electron-updater": "^6.6.2",
+    "lucide-react": "^1.66.0",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "react-router-dom": "^7.18.5",
+    "recharts": "^3.10.1",
+    "tailwind-merge": "3.4.0",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.17",
+    "@types/node": "22.19.17",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.1.1",
+    "electron": "^45.2.2",
+    "electron-builder": "^26.18.0",
+    "tailwindcss": "4.1.17",
+    "typescript": "5.9.3",
+    "vite": "7.3.2",
+    "vite-plugin-singlefile": "2.3.0"
+  },
+  "build": {
+    "appId": "br.com.jngesso.orcamentos",
+    "productName": "J&N Orçamentos",
+    "asar": true,
+    "directories": {
+      "buildResources": "build",
+      "output": "../../outputs/windows"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "JN-Orcamentos-${version}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "J&N Orçamentos"
+    },
+    "publish": [{
+      "provider": "github",
+      "owner": "Gustavo-viper",
+      "repo": "jn-orcamentos",
+      "releaseType": "release"
+    }]
+  }
+}
