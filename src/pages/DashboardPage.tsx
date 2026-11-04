@@ -51,7 +51,7 @@ export default function DashboardPage() {
 
   // Vendas por mês: histórico mock + mês atual com dados reais
   const salesByMonth = useMemo(() => {
-    const data = [...mockDashboard.salesByMonth];
+    const data = mockDashboard.salesByMonth.map((month) => ({ ...month }));
     const last = data[data.length - 1];
     last.value = Math.round(stats.sales);
     return data;
@@ -182,7 +182,7 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
             {activities.slice(0, 8).map((a) => {
-              const I = actIcon[a.type];
+              const I = actIcon[a.type] ?? Activity;
               return (
                 <div key={a.id} className="flex items-start gap-3">
                   <div className="glass-subtle rounded-xl p-2 shrink-0"><I className="h-4 w-4 text-coffee-600 dark:text-champagne-300" /></div>

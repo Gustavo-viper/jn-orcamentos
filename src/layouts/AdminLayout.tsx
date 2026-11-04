@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { relativeTime } from "@/utils/format";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
+import { PageErrorBoundary } from "@/components/PageErrorBoundary";
 import { getCurrentUser, signOut } from "@/services/authService";
 
 const nav = [
@@ -163,7 +164,9 @@ export function AdminLayout() {
 
         <main className="admin-main-content flex-1 min-w-0 p-3 sm:p-5 lg:p-6 pb-24 lg:pb-6">
           <div className="admin-main-inner min-w-0 max-w-[1400px] mx-auto">
-            <Outlet />
+            <PageErrorBoundary resetKey={location.pathname}>
+              <Outlet />
+            </PageErrorBoundary>
           </div>
         </main>
       </div>

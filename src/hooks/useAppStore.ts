@@ -32,6 +32,19 @@ let initPromise: Promise<void> | undefined;
 let sharedRefreshEventsAttached = false;
 
 const sameData = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+const activityTypes = new Set<Activity["type"]>(["quote", "order", "finance", "client"]);
+
+function normalizeActivities(value: unknown): Activity[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is Activity => {
+    if (!entry || typeof entry !== "object") return false;
+    const activity = entry as Partial<Activity>;
+    return typeof activity.id === "string"
+      && typeof activity.message === "string"
+      && typeof activity.date === "string"
+      && activityTypes.has(activity.type as Activity["type"]);
+  });
+}
 
 async function refreshSharedState() {
   if (sharedRefreshPromise) return sharedRefreshPromise;
@@ -60,7 +73,7 @@ async function refreshSharedState() {
       const rotatedQuotes = secureQuotes.filter((quote, index) => quote.token !== pulled.quotes[index].token);
       await Promise.all(rotatedQuotes.map((quote) => quoteService.update(quote.id, { token: quote.token })));
 
-      const latest = { ...pulled, quotes: secureQuotes };
+      const latest = { ...pulled, quotes: secureQuotes, activities: normalizeActivities(pulled.activities) };
       const currentAfterPull = useAppStore.getState();
       const changes: Partial<AppState> = {};
       for (const key of ["clients", "products", "services", "quotes", "workOrders", "finance", "activities", "settings"] as const) {
@@ -190,7 +203,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const fixed = quotes.map((q) =>
         q.status === "pendente" && new Date(q.validUntil).getTime() < now ? { ...q, status: "expirado" as const } : q
       );
-      const currentActivities = activities.filter((activity) => ["quote", "order", "finance", "client"].includes((activity as { type: string }).type));
+      const currentActivities = normalizeActivities(activities);
       const shared = { clients, products, services, quotes: fixed, workOrders, finance, activities: currentActivities, settings };
       const secureQuotes = shared.quotes.map((quote) => ({
         ...quote,
