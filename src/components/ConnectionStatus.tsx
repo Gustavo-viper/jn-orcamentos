@@ -24,7 +24,7 @@ export function ConnectionStatus() {
     window.addEventListener("offline", onChange);
     window.addEventListener("focus", onChange);
     document.addEventListener("visibilitychange", onChange);
-    const timer = window.setInterval(() => { void refresh(); }, 30_000);
+    const timer = window.setInterval(() => { void refresh(); }, 5_000);
     void refresh();
     return () => {
       mounted = false;

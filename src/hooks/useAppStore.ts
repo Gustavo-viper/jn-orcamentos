@@ -102,7 +102,8 @@ function startSharedRefresh() {
   const refreshWhenVisible = () => {
     if (document.visibilityState === "visible") void refreshSharedState();
   };
-  sharedRefreshTimer = window.setInterval(refreshWhenVisible, 60_000);
+  // Pull updates frequently so the second user sees new quotes and changes quickly.
+  sharedRefreshTimer = window.setInterval(refreshWhenVisible, 5_000);
   if (!sharedRefreshEventsAttached) {
     window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener("online", refreshWhenVisible);

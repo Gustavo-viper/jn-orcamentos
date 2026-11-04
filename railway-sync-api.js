@@ -62,20 +62,60 @@ const publicPortalNotFound = () => new Response(`<!doctype html><html lang="pt-B
 if(u.pathname.startsWith('/portal/public/')){
   const match=u.pathname.match(/^\/portal\/public\/([0-9a-fA-F]{32})$/);
   if(req.method!=='GET'||!match)return publicPortalNotFound();
-  const token=match[1].toUpperCase(),rows=await sql`SELECT record_id,data FROM app_sync_records WHERE resource='quotes' AND is_deleted=false AND data->>'token'=${token} LIMIT 1`;
-  if(!rows.length||rows[0].data.status==='rascunho')return publicPortalNotFound();
-  const quote=rows[0].data;
-  const settingsRows=await sql`SELECT data FROM app_sync_records WHERE resource='settings' AND record_id='company' AND is_deleted=false LIMIT 1`;
-  const clientRows=quote.clientId?await sql`SELECT data FROM app_sync_records WHERE resource='clients' AND record_id=${String(quote.clientId)} AND is_deleted=false LIMIT 1`:[];
-  return portalHtml(quote,settingsRows[0]?.data||{},clientRows[0]?.data,token);
+  const token=match[1].toUpperCase(),rows=await sql`SELECT record_id,data FROM app_sync_records WHERE resource='quotes' AND is_deleted=false AND upper(data->>'token')=${token} LIMIT 1`;
+  if(rows.length&&rows[0].data.status!=='rascunho'){
+    const quote=rows[0].data;
+    const settingsRows=await sql`SELECT data FROM app_sync_records WHERE resource='settings' AND record_id='company' AND is_deleted=false LIMIT 1`;
+    const clientRows=quote.clientId?await sql`SELECT data FROM app_sync_records WHERE resource='clients' AND record_id=${String(quote.clientId)} AND is_deleted=false LIMIT 1`:[];
+    return portalHtml(quote,settingsRows[0]?.data||{},clientRows[0]?.data,token);
+  }
+  // Compatibilidade com orçamentos criados pela versão anterior, que usa quote_meta.
+  const legacyRows=await sql`SELECT q.*,qm.discount,qm.margin,qm.valid_until,c.name AS client_name FROM quotes q JOIN quote_meta qm ON qm.quote_id=q.id LEFT JOIN clients c ON c.id=q.client_id WHERE upper(replace(qm.public_token,'-',''))=${token} LIMIT 1`;
+  if(!legacyRows.length)return publicPortalNotFound();
+  const old=legacyRows[0],quantity=num(old.quantity)||num(old.area)||num(old.perimeter),total=num(old.total),discount=num(old.discount);
+  const measureType=old.charge_type==='area'?'area':'linear';
+  const legacyQuote={id:String(old.id),number:String(old.id).padStart(4,'0'),clientId:old.client_id,clientName:old.client_name||'Cliente',items:[{roomName:'—',serviceName:old.service||'Serviço',measureValue:quantity,measureType,unitLabel:'ml',quotedUnitPrice:quantity>0?total/quantity:total,fixedRate:true,laborTotal:total}],total,priceBeforeDiscount:total+discount,discountAmount:discount,marginPercent:num(old.margin),status:String(old.status||'PENDENTE').toLowerCase(),createdAt:old.created_at,validUntil:old.valid_until,notes:old.description||''};
+  const legacySettings=await sql`SELECT company_name,whatsapp,email FROM settings WHERE id=1`;
+  const company=legacySettings[0]||{};
+  return portalHtml(legacyQuote,{name:company.company_name,whatsapp:company.whatsapp,email:company.email},null,token);
 }
 const publicPortalAction=u.pathname.match(/^\/api\/public-portal\/([0-9a-fA-F]{32})$/);
 if(publicPortalAction&&req.method==='POST'){
   const token=publicPortalAction[1].toUpperCase(),body=await req.json();
   if(!['approve','reject'].includes(body.action))return J({error:'Ação inválida.'},400);
+  const legacyMatch=await sql`SELECT q.id FROM quotes q JOIN quote_meta qm ON qm.quote_id=q.id WHERE upper(replace(qm.public_token,'-',''))=${token} LIMIT 1`;
+  if(legacyMatch.length){
+    let legacyOutcome={status:404,error:'Orçamento não encontrado.'};
+    await sql.begin(async tx=>{
+      const rows=await tx`SELECT q.* FROM quotes q JOIN quote_meta qm ON qm.quote_id=q.id WHERE upper(replace(qm.public_token,'-',''))=${token} LIMIT 1 FOR UPDATE OF q`;
+      if(!rows.length)return;
+      const quote=rows[0],status=String(quote.status||'').toUpperCase();
+      if(status==='APROVADO'&&body.action==='approve'){legacyOutcome={status:200,ok:true,already:true};return;}
+      if(status!=='PENDENTE'){legacyOutcome={status:409,error:'Este orçamento não está mais aguardando resposta.'};return;}
+      if(body.action==='reject'){
+        await tx`UPDATE quotes SET status='RECUSADO' WHERE id=${quote.id}`;
+        legacyOutcome={status:200,ok:true,statusQuote:'recusado'};return;
+      }
+      const items=await tx`SELECT * FROM quote_items WHERE quote_id=${quote.id}`;
+      for(const item of items){
+        const products=await tx`SELECT * FROM products WHERE id=${item.product_id}`;
+        if(!products.length||num(products[0].stock)<num(item.quantity)){legacyOutcome={status:409,error:'Estoque insuficiente para '+(products[0]?.name||'material')+'.'};return;}
+      }
+      for(const item of items){
+        const products=await tx`SELECT * FROM products WHERE id=${item.product_id}`;
+        await tx`UPDATE products SET stock=stock-${num(item.quantity)} WHERE id=${item.product_id}`;
+        await tx`INSERT INTO stock_movements(product_id,kind,quantity,cost,reason,quote_id) VALUES(${item.product_id},'SAIDA',${num(item.quantity)},${num(products[0].cost)},${'Aprovação pelo portal — orçamento #'+quote.id},${quote.id})`;
+      }
+      await tx`UPDATE quotes SET status='APROVADO' WHERE id=${quote.id}`;
+      await tx`INSERT INTO work_orders(quote_id,client_id,status) VALUES(${quote.id},${quote.client_id},'ABERTA') ON CONFLICT(quote_id) DO NOTHING`;
+      await tx`INSERT INTO finance_entries(type,description,amount,category,status,quote_id) VALUES('ENTRADA',${'Orçamento #'+quote.id},${num(quote.total)},'Venda','PENDENTE',${quote.id}) ON CONFLICT DO NOTHING`;
+      legacyOutcome={status:200,ok:true,statusQuote:'aprovado'};
+    });
+    return J(legacyOutcome,legacyOutcome.status);
+  }
   let outcome={status:404,error:'Orçamento não encontrado.'};
   await sql.begin(async tx=>{
-    const rows=await tx`SELECT record_id,data FROM app_sync_records WHERE resource='quotes' AND is_deleted=false AND data->>'token'=${token} LIMIT 1 FOR UPDATE`;
+    const rows=await tx`SELECT record_id,data FROM app_sync_records WHERE resource='quotes' AND is_deleted=false AND upper(data->>'token')=${token} LIMIT 1 FOR UPDATE`;
     if(!rows.length)return;
     const quote=rows[0].data;
     if(quote.status==='aprovado'&&body.action==='approve'){outcome={status:200,ok:true,already:true};return;}
@@ -189,3 +229,4 @@ if (u.pathname === '/api/sync/records' && req.method === 'POST') {
   else await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
   return J({ok:true});
 }
+

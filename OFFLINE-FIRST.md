@@ -5,7 +5,8 @@
 - O banco compartilhado é PostgreSQL no Railway. O app acessa o banco somente pelo backend autenticado; nenhuma senha do banco vai para o frontend.
 - Clientes, serviços, orçamentos, obras, financeiro, atividades e configurações continuam salvos no IndexedDB do dispositivo.
 - Cada alteração entra em uma fila local e é enviada quando a conexão com a API volta. O app tenta sincronizar ao recuperar a internet e a cada 30 segundos.
-- As atualizações dos outros usuários são buscadas a cada 15 segundos enquanto o app está aberto.
+- As atualizações dos outros usuários são buscadas a cada 5 segundos enquanto o app está aberto.
+- Alterações locais são enviadas imediatamente; uma rodada ativa repete a fila se novas alterações chegarem durante o envio.
 - O link do portal usa a rota pública do Railway, não o endereço local do navegador ou do executável. Assim o cliente pode abrir o orçamento sem instalar o app; aprovações entram no banco e aparecem na próxima sincronização.
 - A faixa no topo diferencia uso offline, falha de conexão com o banco, alterações pendentes e sincronização ativa.
 - As contas compartilhadas são Jefersson e Giovane. O primeiro cadastro de cada uma exige conexão, senha com ao menos 8 caracteres e o código de ativação configurado no Railway. Depois, a senha e sessão local permitem entrar sem internet neste dispositivo.
@@ -33,3 +34,4 @@ Para habilitar a recuperação, configure também `JEFERSSON_PASSWORD_RESET_CODE
 - O primeiro login em um banco sem registros compartilhados envia os dados existentes naquele dispositivo para o banco. Faça esse primeiro acesso pelo dispositivo que contém os dados corretos.
 - Os dados antigos das tabelas da versão anterior do Railway não são apagados por esta sincronização; ela usa tabelas próprias `app_users`, `app_sessions` e `app_sync_records`.
 - A fila offline fica armazenada no navegador. Apagar os dados do navegador antes da sincronização pode remover alterações ainda pendentes.
+

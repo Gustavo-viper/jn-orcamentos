@@ -32,6 +32,7 @@ export interface SyncQueueItem {
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 let syncInProgress = false;
+let syncRequested = false;
 
 export const delay = (ms = LATENCY) => new Promise((r) => setTimeout(r, ms));
 
@@ -208,27 +209,34 @@ async function syncItem(item: SyncQueueItem) {
 }
 
 export async function syncPending() {
-  if (syncInProgress || !API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return;
+  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return;
+  if (syncInProgress) {
+    syncRequested = true;
+    return;
+  }
   syncInProgress = true;
   try {
-    const queue = await getSyncQueue();
     let synced = 0;
-    for (const item of queue) {
-      try {
-        const ok = await syncItem(item);
-        if (ok) {
-          await idbDelete(QUEUE_STORE, item.id);
-          synced += 1;
+    do {
+      syncRequested = false;
+      const queue = await getSyncQueue();
+      for (const item of queue) {
+        try {
+          const ok = await syncItem(item);
+          if (ok) {
+            await idbDelete(QUEUE_STORE, item.id);
+            synced += 1;
+          }
+        } catch (error) {
+          await idbPut(QUEUE_STORE, {
+            ...item,
+            attempts: item.attempts + 1,
+            lastError: error instanceof Error ? error.message : "Falha de sincronização",
+          });
+          // Não bloqueia os demais itens.
         }
-      } catch (error) {
-        await idbPut(QUEUE_STORE, {
-          ...item,
-          attempts: item.attempts + 1,
-          lastError: error instanceof Error ? error.message : "Falha de sincronização",
-        });
-        // Não bloqueia os demais itens.
       }
-    }
+    } while (syncRequested);
     if (synced) await setLastSyncAt(new Date().toISOString());
   } finally {
     syncInProgress = false;
@@ -303,9 +311,11 @@ export async function checkApiConnection() {
 
 export function startSyncEngine() {
   if (typeof window === "undefined") return () => undefined;
-  const sync = () => { void syncPending(); };
+  const sync = () => {
+    if (document.visibilityState === "visible") void syncPending();
+  };
   window.addEventListener("online", sync);
-  const timer = window.setInterval(sync, 30_000);
+  const timer = window.setInterval(sync, 5_000);
   sync();
   return () => {
     window.removeEventListener("online", sync);
@@ -356,3 +366,4 @@ export function createRepository<T extends { id: string }>(key: string, seed: T[
     },
   };
 }
+
