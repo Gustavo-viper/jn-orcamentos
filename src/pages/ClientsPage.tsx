@@ -1,6 +1,6 @@
 import { ClientFormModal, type ClientFormData } from "@/components/ClientForm";
 import { Badge, Button, ConfirmModal, EmptyState, GlassCard, Input, PageHeader, Select, Table, Td, Th, Tooltip, clientStatusMeta } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import type { Client } from "@/types";
 import { openWhatsApp } from "@/utils/whatsapp";
@@ -11,7 +11,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 export default function ClientsPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const { clients, quotes, createClient, updateClient, deleteClient } = useAppStore();
+  const { clients, quotes, createClient, updateClient, deleteClient } = useAppStoreShallow((state) => ({ clients: state.clients, quotes: state.quotes, createClient: state.createClient, updateClient: state.updateClient, deleteClient: state.deleteClient }));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("todos");
   const [formOpen, setFormOpen] = useState(false);
@@ -122,3 +122,4 @@ export default function ClientsPage() {
     </div>
   );
 }
+

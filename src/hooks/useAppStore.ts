@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useShallow } from "zustand/react/shallow";
 import type {
   Activity,
   Client,
@@ -25,7 +26,77 @@ import {
 import { addDays, genToken, pad, uid } from "@/utils/format";
 import { hasSharedState, pullSharedState, pushInitialSharedState } from "@/services/storage";
 
-let sharedRefreshTimer: ReturnType<typeof setInterval> | undefined;
+let sharedRefreshTimer: number | undefined;
+let sharedRefreshPromise: Promise<void> | undefined;
+let initPromise: Promise<void> | undefined;
+let sharedRefreshEventsAttached = false;
+
+const sameData = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+
+async function refreshSharedState() {
+  if (sharedRefreshPromise) return sharedRefreshPromise;
+
+  const refresh = (async () => {
+    const current = useAppStore.getState();
+    const shared = {
+      clients: current.clients,
+      products: current.products,
+      services: current.services,
+      quotes: current.quotes,
+      workOrders: current.workOrders,
+      finance: current.finance,
+      activities: current.activities,
+      settings: current.settings,
+    };
+
+    try {
+      const hasCloud = await hasSharedState();
+      if (!hasCloud) await pushInitialSharedState(shared);
+      const pulled = await pullSharedState(shared);
+      const secureQuotes = pulled.quotes.map((quote) => ({
+        ...quote,
+        token: /^[A-F0-9]{32}$/i.test(quote.token) ? quote.token : genToken(),
+      }));
+      const rotatedQuotes = secureQuotes.filter((quote, index) => quote.token !== pulled.quotes[index].token);
+      await Promise.all(rotatedQuotes.map((quote) => quoteService.update(quote.id, { token: quote.token })));
+
+      const latest = { ...pulled, quotes: secureQuotes };
+      const currentAfterPull = useAppStore.getState();
+      const changes: Partial<AppState> = {};
+      for (const key of ["clients", "products", "services", "quotes", "workOrders", "finance", "activities", "settings"] as const) {
+        if (!sameData(currentAfterPull[key], latest[key])) changes[key] = latest[key] as never;
+      }
+
+      if (Object.keys(changes).length) {
+        if (changes.settings) document.documentElement.classList.toggle("dark", changes.settings.theme === "dark");
+        useAppStore.setState(changes);
+      }
+    } catch (error) {
+      console.warn("Sincronização compartilhada indisponível; mantendo os dados locais", error);
+    }
+  })();
+
+  sharedRefreshPromise = refresh;
+  try {
+    await refresh;
+  } finally {
+    if (sharedRefreshPromise === refresh) sharedRefreshPromise = undefined;
+  }
+}
+
+function startSharedRefresh() {
+  if (sharedRefreshTimer || typeof window === "undefined") return;
+  const refreshWhenVisible = () => {
+    if (document.visibilityState === "visible") void refreshSharedState();
+  };
+  sharedRefreshTimer = window.setInterval(refreshWhenVisible, 60_000);
+  if (!sharedRefreshEventsAttached) {
+    window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener("online", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    sharedRefreshEventsAttached = true;
+  }
+}
 
 interface AppState {
   loading: boolean;
@@ -98,8 +169,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   settings: defaultSettings,
 
   async init() {
-    set({ loading: true });
-    try {
+    if (initPromise) return initPromise;
+
+    const load = (async () => {
+      set({ loading: !get().loaded });
+      try {
       const [clients, products, services, quotes, workOrders, finance, activities, settings] =
         await Promise.all([
           clientService.list(),
@@ -117,34 +191,30 @@ export const useAppStore = create<AppState>((set, get) => ({
         q.status === "pendente" && new Date(q.validUntil).getTime() < now ? { ...q, status: "expirado" as const } : q
       );
       const currentActivities = activities.filter((activity) => ["quote", "order", "finance", "client"].includes((activity as { type: string }).type));
-      let shared = { clients, products, services, quotes: fixed, workOrders, finance, activities: currentActivities, settings };
-      try {
-        const hasCloud = await hasSharedState();
-        if (!hasCloud) await pushInitialSharedState(shared);
-        shared = await pullSharedState(shared);
-      } catch (error) {
-        console.warn("Sincronização inicial indisponível; usando dados locais", error);
-      }
+      const shared = { clients, products, services, quotes: fixed, workOrders, finance, activities: currentActivities, settings };
       const secureQuotes = shared.quotes.map((quote) => ({
         ...quote,
         token: /^[A-F0-9]{32}$/i.test(quote.token) ? quote.token : genToken(),
       }));
       const rotatedQuotes = secureQuotes.filter((quote, index) => quote.token !== shared.quotes[index].token);
       await Promise.all(rotatedQuotes.map((quote) => quoteService.update(quote.id, { token: quote.token })));
-      shared = { ...shared, quotes: secureQuotes };
-      document.documentElement.classList.toggle("dark", shared.settings.theme === "dark");
-      set({ ...shared, loading: false, loaded: true });
-      if (sharedRefreshTimer) clearInterval(sharedRefreshTimer);
-      sharedRefreshTimer = setInterval(() => {
-        const current = get();
-        void pullSharedState({ clients: current.clients, products: current.products, services: current.services, quotes: current.quotes, workOrders: current.workOrders, finance: current.finance, activities: current.activities, settings: current.settings })
-          .then((latest) => set(latest))
-          .catch((error) => console.warn("Falha ao atualizar dados compartilhados", error));
-      }, 15_000);
-    } catch (error) {
-      console.error("Falha ao carregar dados locais", error);
-      document.documentElement.classList.toggle("dark", get().settings.theme === "dark");
-      set({ loading: false, loaded: true });
+      const localState = { ...shared, quotes: secureQuotes };
+      document.documentElement.classList.toggle("dark", localState.settings.theme === "dark");
+      set({ ...localState, loading: false, loaded: true });
+      startSharedRefresh();
+      void refreshSharedState();
+      } catch (error) {
+        console.error("Falha ao carregar dados locais", error);
+        document.documentElement.classList.toggle("dark", get().settings.theme === "dark");
+        set({ loading: false, loaded: true });
+      }
+    })();
+
+    initPromise = load;
+    try {
+      await load;
+    } finally {
+      if (initPromise === load) initPromise = undefined;
     }
   },
 
@@ -368,3 +438,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ settings: st });
   },
 }));
+
+export function useAppStoreShallow<T extends object>(selector: (state: AppState) => T): T {
+  return useAppStore(useShallow(selector));
+}
+

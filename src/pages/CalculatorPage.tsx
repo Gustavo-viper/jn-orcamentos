@@ -1,5 +1,5 @@
 import { Badge, Button, Field, GlassCard, Input, PageHeader, Select, Textarea, Tooltip } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import type { QuoteItem } from "@/types";
 import { buildQuoteItem, calcMeasures, calcPlates, calcTotals } from "@/utils/calc";
@@ -7,6 +7,28 @@ import { addDays, formatCurrency, formatNumber, uid } from "@/utils/format";
 import { Calculator, Check, FileText, Layers, Plus, Ruler, Trash2, UserPlus, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+
+const DRAFT_KEY = "jn-gesso:calculator-draft-v1";
+const DRAFT_MAX_AGE = 8 * 60 * 60 * 1000;
+
+function readCalculatorDraft() {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return {};
+    const draft = JSON.parse(raw) as { savedAt?: number } & Record<string, unknown>;
+    if (!draft.savedAt || Date.now() - draft.savedAt > DRAFT_MAX_AGE) {
+      sessionStorage.removeItem(DRAFT_KEY);
+      return {};
+    }
+    return draft;
+  } catch {
+    return {};
+  }
+}
+
+function clearCalculatorDraft() {
+  try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* ignore unavailable session storage */ }
+}
 
 const num = (v: string) => {
   const n = parseFloat(v.replace(",", "."));
@@ -16,33 +38,52 @@ const num = (v: string) => {
 export default function CalculatorPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { clients, services, products, settings, quotes, createQuote, updateQuote } = useAppStore();
+  const { clients, services, products, settings, quotes, createQuote, updateQuote } = useAppStoreShallow((state) => ({ clients: state.clients, services: state.services, products: state.products, settings: state.settings, quotes: state.quotes, createQuote: state.createQuote, updateQuote: state.updateQuote }));
 
   const editId = params.get("edit");
   const editing = editId ? quotes.find((q) => q.id === editId) : undefined;
+  const [draft] = useState(() => editId ? {} : readCalculatorDraft());
 
   // ---- Cabeçalho do orçamento ----
-  const [clientId, setClientId] = useState(params.get("cliente") || "");
-  const [items, setItems] = useState<QuoteItem[]>([]);
-  const [marginPercent, setMarginPercent] = useState(settings.defaultMargin);
-  const [discountType, setDiscountType] = useState<"percent" | "value">("value");
-  const [discountValue, setDiscountValue] = useState(0);
-  const [downPayment, setDownPayment] = useState(settings.downPaymentPercent);
-  const [notes, setNotes] = useState("Valores válidos conforme medidas informadas. Alterações no projeto podem gerar ajustes.");
-  const [validityDays, setValidityDays] = useState(settings.quoteValidityDays);
+  const [clientId, setClientId] = useState(String(draft.clientId || params.get("cliente") || ""));
+  const [items, setItems] = useState<QuoteItem[]>((draft.items as QuoteItem[] | undefined) ?? []);
+  const [marginPercent, setMarginPercent] = useState(Number(draft.marginPercent ?? settings.defaultMargin));
+  const [discountType, setDiscountType] = useState<"percent" | "value">((draft.discountType as "percent" | "value" | undefined) ?? "value");
+  const [discountValue, setDiscountValue] = useState(Number(draft.discountValue ?? 0));
+  const [downPayment, setDownPayment] = useState(Number(draft.downPayment ?? settings.downPaymentPercent));
+  const [notes, setNotes] = useState(String(draft.notes ?? "Valores válidos conforme medidas informadas. Alterações no projeto podem gerar ajustes."));
+  const [validityDays, setValidityDays] = useState(Number(draft.validityDays ?? settings.quoteValidityDays));
   const [saving, setSaving] = useState(false);
 
   // ---- Item atual (editor) ----
-  const [serviceId, setServiceId] = useState("s1");
-  const [width, setWidth] = useState("");
-  const [length, setLength] = useState("");
-  const [height, setHeight] = useState("");
-  const [wasteOption, setWasteOption] = useState<"0" | "5" | "10" | "custom">("0");
-  const [customWaste, setCustomWaste] = useState("15");
-  const [laborOverride, setLaborOverride] = useState<string>("");
-  const [roomName, setRoomName] = useState("");
-  const [negativeMeasures, setNegativeMeasures] = useState<{ id: string; label: string; width: string; length: string }[]>([]);
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [serviceId, setServiceId] = useState(String(draft.serviceId || "s1"));
+  const [width, setWidth] = useState(String(draft.width ?? ""));
+  const [length, setLength] = useState(String(draft.length ?? ""));
+  const [height, setHeight] = useState(String(draft.height ?? ""));
+  const [wasteOption, setWasteOption] = useState<"0" | "5" | "10" | "custom">((draft.wasteOption as "0" | "5" | "10" | "custom" | undefined) ?? "0");
+  const [customWaste, setCustomWaste] = useState(String(draft.customWaste ?? "15"));
+  const [laborOverride, setLaborOverride] = useState<string>(String(draft.laborOverride ?? ""));
+  const [roomName, setRoomName] = useState(String(draft.roomName ?? ""));
+  const [negativeMeasures, setNegativeMeasures] = useState<{ id: string; label: string; width: string; length: string }[]>((draft.negativeMeasures as { id: string; label: string; width: string; length: string }[] | undefined) ?? []);
+  const [editingItemId, setEditingItemId] = useState<string | null>((draft.editingItemId as string | null | undefined) ?? null);
+
+  useEffect(() => {
+    const clientFromUrl = params.get("cliente");
+    if (clientFromUrl) setClientId(clientFromUrl);
+  }, [params]);
+
+  useEffect(() => {
+    if (editId) return;
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+        savedAt: Date.now(), clientId, items, marginPercent, discountType, discountValue,
+        downPayment, notes, validityDays, serviceId, width, length, height, wasteOption,
+        customWaste, laborOverride, roomName, negativeMeasures, editingItemId,
+      }));
+    } catch {
+      // A calculadora continua funcionando mesmo se o navegador bloquear o armazenamento de sessão.
+    }
+  }, [editId, clientId, items, marginPercent, discountType, discountValue, downPayment, notes, validityDays, serviceId, width, length, height, wasteOption, customWaste, laborOverride, roomName, negativeMeasures, editingItemId]);
 
   useEffect(() => {
     if (editing) {
@@ -57,7 +98,11 @@ export default function CalculatorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId]);
 
-  const service = services.find((s) => s.id === serviceId) || services[0];
+  const activeServices = services.filter((item) => item.active);
+  const service = activeServices.find((item) => item.id === serviceId) || activeServices[0];
+  useEffect(() => {
+    if (activeServices.length && !activeServices.some((item) => item.id === serviceId)) setServiceId(activeServices[0].id);
+  }, [services, serviceId]);
   const wastePercent = wasteOption === "custom" ? num(customWaste) : Number(wasteOption);
   const measures = { width: num(width), length: num(length), height: num(height) };
   const mr = calcMeasures(measures);
@@ -164,10 +209,12 @@ export default function CalculatorPage() {
       if (editing) {
         await updateQuote(editing.id, payload);
         toast.success("Orçamento atualizado", `#${editing.number}`);
+        clearCalculatorDraft();
         navigate(`/orcamentos/${editing.id}`);
       } else {
         const q = await createQuote(payload);
         toast.success("Orçamento gerado com sucesso!", `#${q.number} — ${formatCurrency(q.total)}`);
+        clearCalculatorDraft();
         navigate(`/orcamentos/${q.id}`);
       }
     } catch {
@@ -177,7 +224,15 @@ export default function CalculatorPage() {
     }
   };
 
-  if (!service) return null;
+  if (!service) return (
+    <div>
+      <PageHeader title="Calculadora de Gesso" subtitle="Cadastre e ative um serviço para começar um orçamento." />
+      <GlassCard className="p-5">
+        <p className="text-sm text-muted">Não há serviços ativos disponíveis para calcular.</p>
+        <Button className="mt-4" variant="gold" onClick={() => navigate("/servicos")}>Abrir serviços</Button>
+      </GlassCard>
+    </div>
+  );
 
   return (
     <div>
@@ -461,3 +516,4 @@ function Line({ label, value, bold, accent }: { label: string; value: string; bo
     </div>
   );
 }
+

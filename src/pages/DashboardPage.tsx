@@ -1,5 +1,5 @@
 import { Badge, Button, GlassCard, PageHeader, StatCard } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { mockDashboard } from "@/mocks/dashboard";
 import { formatCurrency, relativeTime } from "@/utils/format";
 import {
@@ -18,7 +18,7 @@ const tooltipStyle = { borderRadius: 16, border: "1px solid rgba(255,255,255,0.6
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { clients, quotes, workOrders, finance, activities } = useAppStore();
+  const { clients, quotes, workOrders, finance, activities } = useAppStoreShallow((state) => ({ clients: state.clients, quotes: state.quotes, workOrders: state.workOrders, finance: state.finance, activities: state.activities }));
 
   const stats = useMemo(() => {
     const approved = quotes.filter((q) => q.status === "aprovado");
@@ -199,3 +199,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+

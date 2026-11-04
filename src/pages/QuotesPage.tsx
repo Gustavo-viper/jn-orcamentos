@@ -1,19 +1,23 @@
 import { Badge, Button, ConfirmModal, EmptyState, GlassCard, Input, PageHeader, Select, Table, Td, Th, Tooltip, quoteStatusMeta } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { buildQuoteMessage, openWhatsApp } from "@/utils/whatsapp";
 import { Calculator, Eye, FileText, MessageCircle, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 export default function QuotesPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { quotes, clients, settings, deleteQuote } = useAppStore();
+  const { quotes, clients, settings, deleteQuote } = useAppStoreShallow((state) => ({ quotes: state.quotes, clients: state.clients, settings: state.settings, deleteQuote: state.deleteQuote }));
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(params.get("status") || "todos");
   const [del, setDel] = useState<string | null>(null);
+
+  useEffect(() => {
+    setStatus(params.get("status") || "todos");
+  }, [params]);
 
   const list = useMemo(
     () =>
@@ -100,3 +104,4 @@ export default function QuotesPage() {
     </div>
   );
 }
+

@@ -137,6 +137,27 @@ body {
 }
 .animate-slide-in { animation: slideIn .3s ease both; }
 
+.admin-layout, .admin-main, .admin-main-content, .admin-main-inner { min-width: 0; }
+.admin-main-content { padding-bottom: calc(6rem + env(safe-area-inset-bottom)); }
+
+@media (min-width: 1024px) {
+  .admin-main-content { padding-bottom: 1.5rem; }
+}
+
+@media (max-width: 767px) {
+  body { background-attachment: scroll; }
+  .admin-main-content { overflow-x: clip; overscroll-behavior-y: contain; }
+  .admin-mobile-nav { bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+  .glass { backdrop-filter: blur(10px) saturate(125%); -webkit-backdrop-filter: blur(10px) saturate(125%); }
+  .glass-strong { backdrop-filter: blur(14px) saturate(135%); -webkit-backdrop-filter: blur(14px) saturate(135%); }
+  .glass-subtle { backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .animate-fade-up { animation-duration: .18s; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
 /* Modelo da planilha de orçamento J&N — cabeçalho e grade impressos nos PDFs de referência. */
 .quote-document {
   box-sizing: border-box;
@@ -227,3 +248,4 @@ body {
   .quote-sheet-table tr { break-inside: avoid; page-break-inside: avoid; }
   .quote-sheet-table tbody tr:nth-child(even) { background: #ddd !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+

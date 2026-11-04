@@ -1,6 +1,6 @@
 import { ClientFormModal } from "@/components/ClientForm";
 import { Badge, Button, EmptyState, GlassCard, PageHeader, Table, Td, Th, clientStatusMeta, quoteStatusMeta, orderStatusMeta } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { openWhatsApp } from "@/utils/whatsapp";
@@ -11,7 +11,7 @@ import { useNavigate, useParams } from "react-router-dom";
 export default function ClientDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { clients, quotes, workOrders, finance, updateClient } = useAppStore();
+  const { clients, quotes, workOrders, finance, updateClient } = useAppStoreShallow((state) => ({ clients: state.clients, quotes: state.quotes, workOrders: state.workOrders, finance: state.finance, updateClient: state.updateClient }));
   const client = clients.find((c) => c.id === id);
   const [edit, setEdit] = useState(false);
 
@@ -82,3 +82,4 @@ export default function ClientDetailPage() {
     </div>
   );
 }
+

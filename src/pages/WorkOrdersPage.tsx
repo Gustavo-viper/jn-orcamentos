@@ -1,5 +1,5 @@
 import { Badge, Button, EmptyState, Field, GlassCard, Input, Modal, PageHeader, Select, Textarea, orderStatusMeta } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import type { WorkOrderStatus } from "@/types";
 import { cn } from "@/utils/cn";
@@ -13,7 +13,7 @@ const flow: WorkOrderStatus[] = ["aguardando", "agendada", "em_andamento", "paus
 export default function WorkOrdersPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { workOrders, clients, quotes, updateWorkOrderStatus, updateWorkOrder, createWorkOrder } = useAppStore();
+  const { workOrders, clients, quotes, updateWorkOrderStatus, updateWorkOrder, createWorkOrder } = useAppStoreShallow((state) => ({ workOrders: state.workOrders, clients: state.clients, quotes: state.quotes, updateWorkOrderStatus: state.updateWorkOrderStatus, updateWorkOrder: state.updateWorkOrder, createWorkOrder: state.createWorkOrder }));
   const [filter, setFilter] = useState<"todas" | WorkOrderStatus>("todas");
   const [selected, setSelected] = useState<string | null>(id || null);
   const [statusModal, setStatusModal] = useState<WorkOrderStatus | null>(null);
@@ -21,7 +21,11 @@ export default function WorkOrdersPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [editTeam, setEditTeam] = useState(false);
 
-  useEffect(() => { if (id) setSelected(id); }, [id]);
+  useEffect(() => {
+    setSelected(id ?? null);
+    setStatusModal(null);
+    setEditTeam(false);
+  }, [id]);
 
   const list = useMemo(() => workOrders.filter((w) => filter === "todas" || w.status === filter), [workOrders, filter]);
   const wo = workOrders.find((w) => w.id === selected);
@@ -191,3 +195,4 @@ function NewOrderModal({ onClose, clients, quotes, onSave }: { onClose: () => vo
     </Modal>
   );
 }
+

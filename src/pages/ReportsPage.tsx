@@ -1,5 +1,5 @@
 import { Badge, Button, Field, GlassCard, Input, PageHeader, StatCard, Table, Td, Th } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import { mockDashboard } from "@/mocks/dashboard";
 import { cn } from "@/utils/cn";
@@ -19,7 +19,7 @@ const tooltipStyle = { borderRadius: 16, border: "1px solid rgba(255,255,255,0.6
 const PALETTE = ["#c9a24a", "#8a6240", "#4f3625", "#d4bda1", "#a67c52", "#ebd29a", "#6e4c33"];
 
 export default function ReportsPage() {
-  const { quotes, clients, workOrders, finance } = useAppStore();
+  const { quotes, clients, workOrders, finance } = useAppStoreShallow((state) => ({ quotes: state.quotes, clients: state.clients, workOrders: state.workOrders, finance: state.finance }));
   const [report, setReport] = useState<Report>("vendas");
   const [period, setPeriod] = useState<Period>("mes");
   const [from, setFrom] = useState(new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
@@ -132,3 +132,4 @@ export default function ReportsPage() {
     </div>
   );
 }
+

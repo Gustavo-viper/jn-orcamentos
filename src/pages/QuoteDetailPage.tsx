@@ -1,6 +1,6 @@
 import { QuoteDocument } from "@/components/QuoteDocument";
 import { Badge, Button, ConfirmModal, EmptyState, GlassCard, Modal, PageHeader, quoteStatusMeta } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency } from "@/utils/format";
 import { buildQuoteMessage, openWhatsApp, portalUrl } from "@/utils/whatsapp";
@@ -11,7 +11,7 @@ import { useNavigate, useParams } from "react-router-dom";
 export default function QuoteDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { quotes, clients, settings, approveQuote, rejectQuote, updateQuote } = useAppStore();
+  const { quotes, clients, settings, approveQuote, rejectQuote, updateQuote } = useAppStoreShallow((state) => ({ quotes: state.quotes, clients: state.clients, settings: state.settings, approveQuote: state.approveQuote, rejectQuote: state.rejectQuote, updateQuote: state.updateQuote }));
   const quote = quotes.find((q) => q.id === id);
   const client = clients.find((c) => c.id === quote?.clientId);
   const [approveOpen, setApproveOpen] = useState(false);
@@ -143,3 +143,4 @@ export default function QuoteDetailPage() {
     </div>
   );
 }
+

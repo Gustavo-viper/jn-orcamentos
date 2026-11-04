@@ -1,5 +1,5 @@
 import { Badge, Button, ConfirmModal, EmptyState, Field, GlassCard, Input, Modal, PageHeader, Select, StatCard, Table, Td, Th, Tooltip, financeStatusMeta } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import type { FinanceCategory, FinanceEntry, FinanceStatus, FinanceType } from "@/types";
 import { cn } from "@/utils/cn";
@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
 const catLabel: Record<FinanceCategory, string> = { servico: "Serviço", material: "Material", combustivel: "Combustível", ferramentas: "Ferramentas", fornecedor: "Fornecedor", funcionario: "Funcionário", outros: "Outros" };
 
 export default function FinancePage() {
-  const { finance, clients, quotes, markPaid, updateFinance, createFinance, deleteFinance } = useAppStore();
+  const { finance, clients, quotes, markPaid, updateFinance, createFinance, deleteFinance } = useAppStoreShallow((state) => ({ finance: state.finance, clients: state.clients, quotes: state.quotes, markPaid: state.markPaid, updateFinance: state.updateFinance, createFinance: state.createFinance, deleteFinance: state.deleteFinance }));
   const [tab, setTab] = useState<"todos" | "entrada" | "saida">("todos");
   const [status, setStatus] = useState("todos");
   const [search, setSearch] = useState("");
@@ -135,3 +135,4 @@ function EntryModal({ type, clients, onClose, onSave }: { type: FinanceType; cli
     </Modal>
   );
 }
+

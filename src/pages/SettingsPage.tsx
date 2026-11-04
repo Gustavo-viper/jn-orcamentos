@@ -1,5 +1,5 @@
 import { Button, ConfirmModal, Field, GlassCard, Input, PageHeader, Textarea } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import type { CompanySettings } from "@/types";
 import { cn } from "@/utils/cn";
@@ -7,7 +7,7 @@ import { Building2, Database, FileText, Moon, Palette, RotateCcw, Save, Sun } fr
 import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
-  const { settings, saveSettings, resetData } = useAppStore();
+  const { settings, saveSettings, resetData } = useAppStoreShallow((state) => ({ settings: state.settings, saveSettings: state.saveSettings, resetData: state.resetData }));
   const [f, setF] = useState<CompanySettings>(settings);
   const [tab, setTab] = useState<"empresa" | "orcamento" | "aparencia" | "dados">("empresa");
   const [busy, setBusy] = useState(false);
@@ -78,3 +78,4 @@ export default function SettingsPage() {
     </div>
   );
 }
+

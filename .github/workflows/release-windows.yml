@@ -54,3 +54,4 @@ jobs:
         run: npm run desktop:publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

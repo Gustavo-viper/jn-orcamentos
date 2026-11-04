@@ -1,5 +1,5 @@
 import { Badge, Button, EmptyState, GlassCard, PageHeader, Table, Td, Th, quoteStatusMeta } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency, formatDate } from "@/utils/format";
 import { buildQuoteMessage, openWhatsApp, portalUrl } from "@/utils/whatsapp";
@@ -7,7 +7,7 @@ import { Copy, ExternalLink, Globe, MessageCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function PortalIndexPage() {
-  const { quotes, clients, settings } = useAppStore();
+  const { quotes, clients, settings } = useAppStoreShallow((state) => ({ quotes: state.quotes, clients: state.clients, settings: state.settings }));
   const navigate = useNavigate();
   const pending = quotes.filter((q) => q.status === "pendente");
   return (
@@ -50,3 +50,4 @@ export default function PortalIndexPage() {
     </div>
   );
 }
+

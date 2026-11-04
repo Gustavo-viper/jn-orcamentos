@@ -8,8 +8,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    void validateCurrentSession().then(async (current) => {
-      if (current) await useAppStore.getState().init();
+    void validateCurrentSession().then((current) => {
       setUser(current);
       setReady(true);
     }).catch(() => setReady(true));
@@ -100,3 +99,4 @@ function LoginPage({ onAuthenticated }: { onAuthenticated: (user: AppUser) => vo
     </main>
   );
 }
+

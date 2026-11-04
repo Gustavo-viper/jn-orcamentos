@@ -2,7 +2,7 @@ import { Logo } from "@/components/Logo";
 import { QuoteDocument } from "@/components/QuoteDocument";
 import { QuoteLinesTable } from "@/components/QuoteLinesTable";
 import { Badge, Button, GlassCard, Modal, quoteStatusMeta } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency, formatDate, formatNumber } from "@/utils/format";
 import { getQuoteLines } from "@/utils/quoteLines";
@@ -13,7 +13,7 @@ import { Link, useParams } from "react-router-dom";
 
 export default function PortalQuotePage() {
   const { token } = useParams();
-  const { quotes, clients, settings, approveQuote, rejectQuote } = useAppStore();
+  const { quotes, clients, settings, approveQuote, rejectQuote } = useAppStoreShallow((state) => ({ quotes: state.quotes, clients: state.clients, settings: state.settings, approveQuote: state.approveQuote, rejectQuote: state.rejectQuote }));
   const quote = quotes.find((q) => q.token.toUpperCase() === (token || "").toUpperCase());
   const client = clients.find((c) => c.id === quote?.clientId);
   const [approveOpen, setApproveOpen] = useState(false);
@@ -145,7 +145,7 @@ function Step({ icon: Icon, title, desc }: { icon: React.ElementType; title: str
 }
 
 function PortalShell({ children }: { children: React.ReactNode }) {
-  const { settings } = useAppStore();
+  const { settings } = useAppStoreShallow((state) => ({ settings: state.settings }));
   return (
     <div className="portal-shell min-h-screen px-4 py-6 sm:py-10">
       <div className="max-w-3xl mx-auto">
@@ -159,3 +159,4 @@ function PortalShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+

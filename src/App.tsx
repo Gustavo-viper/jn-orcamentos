@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AdminLayout } from "@/layouts/AdminLayout";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { Toaster } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import { AuthGate } from "@/components/AuthGate";
@@ -35,7 +35,7 @@ function SplashScreen() {
 }
 
 export default function App() {
-  const { init, loaded } = useAppStore();
+  const { init, loaded } = useAppStoreShallow((state) => ({ init: state.init, loaded: state.loaded }));
   useEffect(() => {
     init();
   }, [init]);
@@ -68,3 +68,4 @@ export default function App() {
     </HashRouter>
   );
 }
+

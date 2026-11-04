@@ -1,5 +1,5 @@
 import { Badge, Button, ConfirmModal, Field, GlassCard, Input, Modal, PageHeader, Select, Textarea } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import type { Service, ServiceMaterial } from "@/types";
 import { buildQuoteItem } from "@/utils/calc";
@@ -8,7 +8,7 @@ import { Layers, Pencil, Plus, Trash2, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export default function ServicesPage() {
-  const { services, products, updateService, createService, deleteService } = useAppStore();
+  const { services, products, updateService, createService, deleteService } = useAppStoreShallow((state) => ({ services: state.services, products: state.products, updateService: state.updateService, createService: state.createService, deleteService: state.deleteService }));
   const [selectedId, setSelectedId] = useState<string | undefined>(services[0]?.id);
   const [simW, setSimW] = useState("3");
   const [simL, setSimL] = useState("5");
@@ -22,7 +22,16 @@ export default function ServicesPage() {
     return buildQuoteItem({ service, products, measures: { width: parseFloat(simW.replace(",", ".")) || 0, length: parseFloat(simL.replace(",", ".")) || 0, height: 0 }, wastePercent: 0 });
   }, [service, products, simW, simL]);
 
-  if (!service) return null;
+  if (!service) return (
+    <div>
+      <PageHeader title="Serviços" subtitle="Cadastre um serviço para habilitar a calculadora e os orçamentos." actions={<Button variant="gold" icon={Plus} onClick={() => setNewOpen(true)}>Novo serviço</Button>} />
+      <GlassCard className="p-5 text-center">
+        <p className="text-sm text-muted">Ainda não há serviços cadastrados.</p>
+        <Button className="mt-4" variant="gold" icon={Plus} onClick={() => setNewOpen(true)}>Cadastrar primeiro serviço</Button>
+      </GlassCard>
+      {newOpen && <ServiceModal onClose={() => setNewOpen(false)} onSave={async (d) => { const created = await createService(d); setSelectedId(created.id); setNewOpen(false); toast.success("Serviço criado"); }} />}
+    </div>
+  );
 
   return (
     <div>
@@ -107,7 +116,7 @@ function Info({ label, value, gold }: { label: string; value: string; gold?: boo
 }
 
 function ServiceModal({ service, onClose, onSave }: { service?: Service; onClose: () => void; onSave: (d: Omit<Service, "id">) => Promise<void> }) {
-  const { products } = useAppStore();
+  const { products } = useAppStoreShallow((state) => ({ products: state.products }));
   const [f, setF] = useState<Omit<Service, "id">>(service ? { ...service, materials: service.materials.map((m) => ({ ...m })) } : { name: "", description: "", measureType: "area", laborPrice: 50, unitLabel: "m²", materials: [], active: true });
   const [busy, setBusy] = useState(false);
   const setMat = (i: number, patch: Partial<ServiceMaterial>) => setF((x) => ({ ...x, materials: x.materials.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
@@ -122,7 +131,8 @@ function ServiceModal({ service, onClose, onSave }: { service?: Service; onClose
         <Field label="Descrição" className="sm:col-span-2"><Textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[60px]" /></Field>
       </div>
       <div className="mt-5">
-        <div className="flex items-center justify-between mb-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted">Materiais</p><Button size="sm" variant="secondary" icon={Plus} onClick={() => setF({ ...f, materials: [...f.materials, { productId: products[0].id, consumption: 1, mode: "per_measure" }] })}>Adicionar material</Button></div>
+        <div className="flex items-center justify-between mb-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted">Materiais</p><Button size="sm" variant="secondary" icon={Plus} disabled={!products.length} onClick={() => { const firstProduct = products[0]; if (firstProduct) setF((current) => ({ ...current, materials: [...current.materials, { productId: firstProduct.id, consumption: 1, mode: "per_measure" }] })); }}>Adicionar material</Button></div>
+        {products.length === 0 && <p className="text-xs text-muted mb-2">Não há materiais configurados para compor este serviço.</p>}
         <div className="space-y-2">
           {f.materials.length === 0 && <p className="text-sm text-muted">Nenhum material. Adicione para calcular automaticamente.</p>}
           {f.materials.map((m, i) => {
@@ -142,3 +152,4 @@ function ServiceModal({ service, onClose, onSave }: { service?: Service; onClose
     </Modal>
   );
 }
+

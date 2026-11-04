@@ -1,6 +1,6 @@
 import { Logo } from "@/components/Logo";
 import { Tooltip } from "@/components/ui";
-import { useAppStore } from "@/hooks/useAppStore";
+import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { cn } from "@/utils/cn";
 import {
   BarChart3, Bell, Calculator, ClipboardList, FileText, Globe, HardHat, LayoutDashboard,
@@ -32,7 +32,7 @@ export function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const user = getCurrentUser();
-  const { settings, setTheme, activities, clients, quotes } = useAppStore();
+  const { settings, setTheme, activities, clients, quotes } = useAppStoreShallow((state) => ({ settings: state.settings, setTheme: state.setTheme, activities: state.activities, clients: state.clients, quotes: state.quotes }));
 
   useEffect(() => setOpen(false), [location.pathname]);
 
@@ -161,8 +161,8 @@ export function AdminLayout() {
           </div>
         </header>
 
-        <main className="admin-main-content flex-1 p-3 sm:p-5 lg:p-6 pb-24 lg:pb-6">
-          <div className="admin-main-inner max-w-[1400px] mx-auto">
+        <main className="admin-main-content flex-1 min-w-0 p-3 sm:p-5 lg:p-6 pb-24 lg:pb-6">
+          <div className="admin-main-inner min-w-0 max-w-[1400px] mx-auto">
             <Outlet />
           </div>
         </main>
@@ -182,7 +182,7 @@ function MobileNav() {
     { to: "/financeiro", icon: Wallet, label: "Finan." },
   ];
   return (
-    <div className="no-print lg:hidden fixed bottom-3 inset-x-3 z-40">
+    <div className="admin-mobile-nav no-print lg:hidden fixed bottom-3 inset-x-3 z-40">
       <div className="glass-strong rounded-2xl flex justify-around py-1.5">
         {items.map((i) => (
           <NavLink key={i.to} to={i.to} className={({ isActive }) => cn("flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl text-[10px] font-medium", isActive ? "text-coffee-700 dark:text-champagne-300" : "text-muted")}>
@@ -194,3 +194,4 @@ function MobileNav() {
     </div>
   );
 }
+
