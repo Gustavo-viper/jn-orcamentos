@@ -40,6 +40,16 @@ jobs:
           git push origin "refs/tags/$tag"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Create release before parallel asset uploads
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          gh release create $tag --title $version --notes "Atualização do aplicativo J&N Orçamentos."
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and publish installer and update manifest
         run: npm run desktop:publish
         env:
