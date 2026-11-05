@@ -4,7 +4,9 @@ import { formatCurrency, onlyDigits } from "./format";
 export const portalUrl = (token: string) => {
   const configuredBase = (import.meta.env.VITE_PUBLIC_PORTAL_URL as string | undefined)?.trim().replace(/\/$/, "");
   const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.trim().replace(/\/$/, "").replace(/\/api$/i, "");
-  const publicBase = configuredBase || (apiBase ? `${apiBase}/portal/public` : "");
+  const publicBase = configuredBase
+    ? (configuredBase.startsWith("/") ? `${apiBase || window.location.origin}${configuredBase}` : configuredBase)
+    : (apiBase ? `${apiBase}/portal/public` : "");
   return publicBase
     ? `${publicBase}/${encodeURIComponent(token)}`
     : `${window.location.origin}${window.location.pathname}#/portal/orcamento/${encodeURIComponent(token)}`;
