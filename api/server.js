@@ -412,8 +412,8 @@ if (u.pathname === '/api/sync/records/batch' && req.method === 'POST') {
         if(recordId || !Array.isArray(payload) || payload.length>10000 || payload.some(record=>!record || typeof record!=='object' || Array.isArray(record) || !String(record.id||''))){
           failed.push({id:String(item.id),error:'Substituição de registros inválida'});continue;
         }
+        // Legacy replaceAll queues are additive in the shared database; new clients send explicit per-record removals.
         await sql.begin(async tx=>{
-          await tx`UPDATE app_sync_records SET is_deleted=true,updated_at=now(),updated_by=${user.id} WHERE resource=${resource} AND is_deleted=false`;
           for(const record of payload){
             await tx`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${String(record.id)},${JSON.stringify(record)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
           }
