@@ -123,10 +123,29 @@ function fallbackWrite<T>(key: string, value: T) {
   try { localStorage.setItem(PREFIX + key, JSON.stringify(value)); } catch { /* ignore */ }
 }
 
+function isEmptyContainer(value: unknown): boolean {
+  return (Array.isArray(value) && value.length === 0)
+    || (value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
+}
+
+function isNonEmptyContainer(value: unknown): boolean {
+  return (Array.isArray(value) && value.length > 0)
+    || (value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0);
+}
+
 export async function readStorageAsync<T>(key: string, fallback: T): Promise<T> {
   try {
     const value = await idbGet<T>(STORE, key);
     if (value !== undefined) {
+      // A previous build could leave valid data in localStorage while the
+      // IndexedDB key exists but contains an empty collection. Restore the
+      // fuller backup before refreshing it, so startup never erases it.
+      const backup = fallbackRead<T | undefined>(key, undefined);
+      if (isEmptyContainer(value) && backup !== undefined && isNonEmptyContainer(backup)) {
+        await idbPut(STORE, backup, key);
+        fallbackWrite(key, backup);
+        return backup;
+      }
       // Rebuild the local backup from installations that only wrote to IndexedDB.
       fallbackWrite(key, value);
       return value;
