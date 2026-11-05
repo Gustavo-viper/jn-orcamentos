@@ -218,6 +218,8 @@ async function syncBatch(items: SyncQueueItem[]): Promise<{ processed: string[];
   });
   // Support an older server while a backend update is rolling out.
   if (!response.headers.get("content-type")?.includes("application/json")) return null;
+  // A malformed item in an old queue must not block all other records in its batch.
+  if (response.status === 400) return null;
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const result = await response.json() as { processed?: string[]; failed?: Array<{ id?: string }> };
   return {
@@ -307,7 +309,8 @@ export async function pullSharedState<T extends Record<string, unknown>>(local: 
       else remoteById.delete(id);
     }
     result[resource] = [...remoteById.values()];
-    await writeStorageAsync(resource, result[resource]);
+    const storageKey = resource === "workOrders" ? "work_orders" : resource;
+    await writeStorageAsync(storageKey, result[resource]);
   }
   if (cloud.settings?.[0]?.data && !pendingByResource.has("settings")) {
     result.settings = cloud.settings[0].data;
@@ -371,6 +374,7 @@ export interface Repository<T extends { id: string }> {
 export function createRepository<T extends { id: string }>(key: string, seed: T[]): Repository<T> {
   const load = () => readStorageAsync<T[]>(key, seed);
   const save = (items: T[]) => writeStorageAsync(key, items);
+  const syncResource = key === "work_orders" ? "workOrders" : key;
 
   return {
     async list() { await delay(); return load(); },
@@ -379,7 +383,7 @@ export function createRepository<T extends { id: string }>(key: string, seed: T[
       const items = await load();
       items.unshift(item);
       await save(items);
-      await enqueue(key, "create", item.id, item);
+      await enqueue(syncResource, "create", item.id, item);
       return item;
     },
     async update(id, patch) {
@@ -388,16 +392,16 @@ export function createRepository<T extends { id: string }>(key: string, seed: T[
       if (idx === -1) throw new Error("Registro não encontrado");
       items[idx] = { ...items[idx], ...patch };
       await save(items);
-      await enqueue(key, "update", id, patch);
+      await enqueue(syncResource, "update", id, patch);
       return items[idx];
     },
     async remove(id) {
       await save((await load()).filter((i) => i.id !== id));
-      await enqueue(key, "remove", id);
+      await enqueue(syncResource, "remove", id);
     },
     async replaceAll(items) {
       await save(items);
-      await enqueue(key, "replaceAll", undefined, items);
+      await enqueue(syncResource, "replaceAll", undefined, items);
       return items;
     },
   };
