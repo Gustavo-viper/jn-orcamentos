@@ -51,17 +51,48 @@ export async function validateCurrentSession() {
   }
 }
 
-export async function createAccount(name: string, password: string, enrollmentCode = "") {
+export async function createAccount(name: string, email: string, password: string, enrollmentCode = "") {
   const user = matchUser(name);
   if (!user) throw new Error("As contas disponíveis são Jefersson e Giovane.");
+  const normalizedEmail = email.trim().toLocaleLowerCase("pt-BR");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) throw new Error("Informe um e-mail válido.");
   if (password.length < 8) throw new Error("A senha precisa ter pelo menos 8 caracteres.");
-  const accounts = readAccounts();
   if (!API_URL) throw new Error("O servidor de contas não está configurado.");
   const normalizedEnrollmentCode = enrollmentCode.trim().replace(/[\s-]/g, "").toUpperCase();
-  const response = await fetch(`${API_URL}/auth/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: user, password, enrollmentCode: normalizedEnrollmentCode }) });
+  const response = await fetch(`${API_URL}/auth/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: user, email: normalizedEmail, password, enrollmentCode: normalizedEnrollmentCode }) });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || "Não foi possível criar a conta.");
+  if (!response.ok) throw new Error(result.error || "Não foi possível enviar o código de confirmação.");
+  return { email: normalizedEmail, emailMasked: String(result.emailMasked || normalizedEmail) };
+}
+
+export async function resendVerificationCode(name: string) {
+  const user = matchUser(name);
+  if (!user) throw new Error("Selecione Jefersson ou Giovane.");
+  if (!API_URL) throw new Error("O servidor de contas não está configurado.");
+  const response = await fetch(`${API_URL}/auth/resend-verification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: user }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Não foi possível reenviar o código.");
+  return String(result.emailMasked || "seu e-mail cadastrado");
+}
+
+export async function verifyEmailAccount(name: string, email: string, code: string, password: string) {
+  const user = matchUser(name);
+  if (!user) throw new Error("Selecione Jefersson ou Giovane.");
+  if (!API_URL) throw new Error("O servidor de contas não está configurado.");
+  const response = await fetch(`${API_URL}/auth/verify-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: email.trim().toLocaleLowerCase("pt-BR"), code: code.trim() }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Não foi possível confirmar o e-mail.");
+  if (typeof result.token !== "string" || result.user !== user) throw new Error("A confirmação retornou uma sessão inválida.");
   const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const accounts = readAccounts();
   const existingIndex = accounts.findIndex((account) => account.user === user);
   const newAccount = { user, salt, passwordHash: await hashPassword(password, salt) };
   if (existingIndex >= 0) accounts[existingIndex] = newAccount;
@@ -131,3 +162,4 @@ export function signOut() {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(TOKEN_KEY);
 }
+

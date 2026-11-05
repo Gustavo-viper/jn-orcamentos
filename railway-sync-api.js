@@ -7,6 +7,17 @@ await sql`CREATE TABLE IF NOT EXISTS app_users (
   password_hash TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`;
+await sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS email TEXT`;
+await sql`ALTER TABLE app_users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ`;
+await sql`CREATE UNIQUE INDEX IF NOT EXISTS app_users_email_unique ON app_users (lower(email)) WHERE email IS NOT NULL`;
+await sql`CREATE TABLE IF NOT EXISTS app_email_verifications (
+  user_id INT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  code_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  attempts INT NOT NULL DEFAULT 0
+)`;
 await sql`CREATE TABLE IF NOT EXISTS app_sessions (
   token_hash TEXT PRIMARY KEY,
   user_id INT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -26,6 +37,28 @@ await sql`CREATE TABLE IF NOT EXISTS app_sync_records (
 const syncResources = new Set(['clients','products','services','quotes','workOrders','finance','activities','settings']);
 const syncResourceName = resource => resource==='work_orders'?'workOrders':resource;
 const digestToken = async (token) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))), b => b.toString(16).padStart(2,'0')).join('');
+const normalizeEmail = value => String(value || '').trim().toLowerCase();
+const isValidEmail = value => value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+const maskEmail = value => { const [local,domain] = value.split('@'); return `${local.slice(0,Math.min(2,local.length))}***@${domain}`; };
+const generateEmailCode = () => { const bytes = new Uint32Array(1); crypto.getRandomValues(bytes); return String(bytes[0] % 100000000).padStart(8,'0'); };
+const verificationDigest = async (userId,email,code) => {
+  const secret = String(Bun.env.EMAIL_VERIFICATION_SECRET || '');
+  if (!secret) throw new Error('EMAIL_VERIFICATION_SECRET_MISSING');
+  const key = await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+  const digest = await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${userId}:${email}:${code}`));
+  return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('');
+};
+const constantTimeEqual = (left,right) => { if (left.length !== right.length) return false; let diff = 0; for (let i=0;i<left.length;i++) diff |= left.charCodeAt(i) ^ right.charCodeAt(i); return diff === 0; };
+const sendVerificationEmail = async (email,code) => {
+  const endpoint = String(Bun.env.EMAIL_WEBHOOK_URL || '');
+  const secret = String(Bun.env.EMAIL_WEBHOOK_SECRET || '');
+  if (!endpoint || !secret) throw new Error('EMAIL_SENDER_NOT_CONFIGURED');
+  const parsed = new URL(endpoint);
+  if (parsed.protocol !== 'https:') throw new Error('EMAIL_SENDER_REQUIRES_HTTPS');
+  const response = await fetch(parsed,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({secret,to:email,code})});
+  const result = await response.json().catch(()=>null);
+  if (!response.ok || result?.ok !== true) throw new Error('EMAIL_DELIVERY_FAILED');
+};
 const authUser = async (req) => {
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return null;
@@ -157,17 +190,66 @@ if(publicPortalAction&&req.method==='POST'){
 if (req.method === 'OPTIONS' && u.pathname.startsWith('/api/')) return new Response(null, {status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,OPTIONS','access-control-allow-headers':'Content-Type,Authorization','access-control-max-age':'86400'}});
 if (u.pathname === '/api/auth/register' && req.method === 'POST') {
   const b=await req.json(), username=['Jefersson','Giovane'].find(n=>n.toLowerCase()===String(b.name||'').trim().toLowerCase());
-  if (!username || typeof b.password!=='string' || b.password.length<8) return J({error:'Informe Jefersson ou Giovane e uma senha com pelo menos 8 caracteres.'},400);
+  const email=normalizeEmail(b.email);
+  if (!username || !isValidEmail(email) || typeof b.password!=='string' || b.password.length<8 || b.password.length>128) return J({error:'Informe a conta, um e-mail válido e uma senha de 8 a 128 caracteres.'},400);
   const expectedCode=String(Bun.env.APP_ENROLLMENT_CODE||'').replace(/[\s-]/g,'').toUpperCase();
   const suppliedCode=String(b.enrollmentCode||'').replace(/[\s-]/g,'').toUpperCase();
   if (!expectedCode || suppliedCode !== expectedCode) return J({error:'Código de ativação inválido.'},403);
-  const existing=await sql`SELECT id FROM app_users WHERE username=${username}`;
-  if (existing.length) return J({error:`A conta de ${username} já foi criada.`},409);
-  const passwordHash=await Bun.password.hash(b.password);
-  const created=await sql`INSERT INTO app_users(username,password_hash) VALUES(${username},${passwordHash}) RETURNING id,username`;
+  const existing=await sql`SELECT id,email_verified_at FROM app_users WHERE username=${username}`;
+  if (existing[0]?.email_verified_at) return J({error:'Esta conta já foi confirmada. Entre ou use a opção de recuperar senha.'},409);
+  if (existing.length) {
+    const recent=await sql`SELECT sent_at > now()-interval '60 seconds' AS limited FROM app_email_verifications WHERE user_id=${existing[0].id}`;
+    if (recent[0]?.limited) return J({error:'Aguarde um minuto antes de pedir outro código.'},429);
+  }
+  try {
+    const passwordHash=await Bun.password.hash(b.password);
+    const account=existing.length
+      ? await sql`UPDATE app_users SET email=${email},password_hash=${passwordHash} WHERE id=${existing[0].id} RETURNING id,username`
+      : await sql`INSERT INTO app_users(username,password_hash,email) VALUES(${username},${passwordHash},${email}) RETURNING id,username`;
+    const code=generateEmailCode(), userId=account[0].id;
+    const codeHash=await verificationDigest(userId,email,code);
+    await sql`INSERT INTO app_email_verifications(user_id,email,code_hash,expires_at,sent_at,attempts) VALUES(${userId},${email},${codeHash},now()+interval '10 minutes',now(),0) ON CONFLICT(user_id) DO UPDATE SET email=EXCLUDED.email,code_hash=EXCLUDED.code_hash,expires_at=EXCLUDED.expires_at,sent_at=now(),attempts=0`;
+    try { await sendVerificationEmail(email,code); }
+    catch (error) { await sql`DELETE FROM app_email_verifications WHERE user_id=${userId}`; return J({error:'Não foi possível enviar o código. O envio de e-mail ainda precisa ser configurado.'},503); }
+    return J({ok:true,emailMasked:maskEmail(email)},202);
+  } catch (error) {
+    if (String(error?.code)==='23505') return J({error:'Este e-mail já está associado a outra conta.'},409);
+    return J({error:'Não foi possível iniciar a confirmação da conta.'},500);
+  }
+}
+if (u.pathname === '/api/auth/resend-verification' && req.method === 'POST') {
+  const b=await req.json(), username=['Jefersson','Giovane'].find(n=>n.toLowerCase()===String(b.name||'').trim().toLowerCase());
+  if (!username) return J({ok:true});
+  const rows=await sql`SELECT id,email FROM app_users WHERE username=${username} AND email_verified_at IS NULL LIMIT 1`;
+  if (!rows.length || !rows[0].email) return J({ok:true});
+  const userId=rows[0].id,email=normalizeEmail(rows[0].email);
+  const recent=await sql`SELECT sent_at > now()-interval '60 seconds' AS limited FROM app_email_verifications WHERE user_id=${userId}`;
+  if (recent[0]?.limited) return J({error:'Aguarde um minuto antes de pedir outro código.'},429);
+  const code=generateEmailCode(), codeHash=await verificationDigest(userId,email,code);
+  await sql`INSERT INTO app_email_verifications(user_id,email,code_hash,expires_at,sent_at,attempts) VALUES(${userId},${email},${codeHash},now()+interval '10 minutes',now(),0) ON CONFLICT(user_id) DO UPDATE SET email=EXCLUDED.email,code_hash=EXCLUDED.code_hash,expires_at=EXCLUDED.expires_at,sent_at=now(),attempts=0`;
+  try { await sendVerificationEmail(email,code); }
+  catch (error) { await sql`DELETE FROM app_email_verifications WHERE user_id=${userId}`; return J({error:'Não foi possível enviar o código. O envio de e-mail ainda precisa ser configurado.'},503); }
+  return J({ok:true,emailMasked:maskEmail(email)});
+}
+if (u.pathname === '/api/auth/verify-email' && req.method === 'POST') {
+  const b=await req.json(), email=normalizeEmail(b.email), code=String(b.code||'').trim();
+  if (!isValidEmail(email) || !/^\d{8}$/.test(code)) return J({error:'Informe o e-mail e o código de 8 dígitos.'},400);
   const token=crypto.randomUUID()+crypto.randomUUID();
-  await sql`INSERT INTO app_sessions(token_hash,user_id,expires_at) VALUES(${await digestToken(token)},${created[0].id},now()+interval '90 days')`;
-  return J({user:created[0].username,token},201);
+  const result=await sql.begin(async tx=>{
+    const rows=await tx`SELECT v.user_id,v.email,v.code_hash,v.expires_at,v.attempts,u.username FROM app_email_verifications v JOIN app_users u ON u.id=v.user_id WHERE lower(v.email)=${email} FOR UPDATE OF v`;
+    if (!rows.length) return {error:'Código inválido ou expirado.',status:400};
+    const row=rows[0];
+    if (new Date(row.expires_at).getTime()<=Date.now()) { await tx`DELETE FROM app_email_verifications WHERE user_id=${row.user_id}`; return {error:'Código expirado. Peça um novo código.',status:400}; }
+    if (Number(row.attempts)>=8) { await tx`DELETE FROM app_email_verifications WHERE user_id=${row.user_id}`; return {error:'Muitas tentativas. Peça um novo código.',status:429}; }
+    const supplied=await verificationDigest(row.user_id,email,code);
+    if (!constantTimeEqual(supplied,String(row.code_hash))) { await tx`UPDATE app_email_verifications SET attempts=attempts+1 WHERE user_id=${row.user_id}`; return {error:'Código de confirmação incorreto.',status:400}; }
+    await tx`UPDATE app_users SET email_verified_at=now() WHERE id=${row.user_id}`;
+    await tx`DELETE FROM app_email_verifications WHERE user_id=${row.user_id}`;
+    await tx`INSERT INTO app_sessions(token_hash,user_id,expires_at) VALUES(${await digestToken(token)},${row.user_id},now()+interval '90 days')`;
+    return {user:row.username};
+  });
+  if (!result.user) return J({error:result.error},result.status);
+  return J({user:result.user,token});
 }
 if (u.pathname === '/api/auth/reset-password' && req.method === 'POST') {
   const b=await req.json(), username=['Jefersson','Giovane'].find(n=>n.toLowerCase()===String(b.name||'').trim().toLowerCase());
@@ -184,8 +266,9 @@ if (u.pathname === '/api/auth/reset-password' && req.method === 'POST') {
 }
 if (u.pathname === '/api/auth/login' && req.method === 'POST') {
   const b=await req.json(), username=['Jefersson','Giovane'].find(n=>n.toLowerCase()===String(b.name||'').trim().toLowerCase());
-  const rows=username?await sql`SELECT id,username,password_hash FROM app_users WHERE username=${username}`:[];
+  const rows=username?await sql`SELECT id,username,password_hash,email_verified_at FROM app_users WHERE username=${username}`:[];
   if (!rows.length || typeof b.password!=='string' || !await Bun.password.verify(b.password,rows[0].password_hash)) return J({error:'Usuário ou senha incorretos.'},401);
+  if (!rows[0].email_verified_at) return J({error:'Confirme o e-mail cadastrado antes de entrar.'},403);
   const token=crypto.randomUUID()+crypto.randomUUID();
   await sql`INSERT INTO app_sessions(token_hash,user_id,expires_at) VALUES(${await digestToken(token)},${rows[0].id},now()+interval '90 days')`;
   return J({user:rows[0].username,token});
