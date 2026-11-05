@@ -99,6 +99,12 @@ const portalHtml = (quote,settings,client,token) => {
 const publicPortalNotFound = () => new Response(`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Orçamento indisponível</title><body style="margin:0;padding:40px;font:16px Arial;background:#f6f2ec;color:#28231e;text-align:center"><h1>Orçamento não encontrado</h1><p>Confira se o link está completo ou peça à empresa para enviá-lo novamente.</p></body></html>`,{status:404,headers:{'content-type':'text/html;charset=utf-8','cache-control':'no-store'}});
 
 // Insert these branches at the beginning of the existing route's try block.
+
+const route = async req => {
+  const u = new URL(req.url);
+  if (req.method === 'GET' && u.pathname === '/health') return new Response('ok',{headers:{'cache-control':'no-store'}});
+  try {
+    if (req.method === 'OPTIONS' && u.pathname.startsWith('/api/')) return new Response(null,{status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,OPTIONS','access-control-allow-headers':'Content-Type,Authorization','access-control-max-age':'86400'}});
 if(u.pathname.startsWith('/portal/public/')){
   const match=u.pathname.match(/^\/portal\/public\/([0-9a-fA-F]{32})$/);
   if(req.method!=='GET'||!match)return publicPortalNotFound();
@@ -119,12 +125,6 @@ if(u.pathname.startsWith('/portal/public/')){
   const company=legacySettings[0]||{};
   return portalHtml(legacyQuote,{name:company.company_name,whatsapp:company.whatsapp,email:company.email},null,token);
 }
-
-const route = async req => {
-  const u = new URL(req.url);
-  if (req.method === 'GET' && u.pathname === '/health') return new Response('ok',{headers:{'cache-control':'no-store'}});
-  try {
-    if (req.method === 'OPTIONS' && u.pathname.startsWith('/api/')) return new Response(null,{status:204,headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,OPTIONS','access-control-allow-headers':'Content-Type,Authorization','access-control-max-age':'86400'}});
 const publicPortalAction=u.pathname.match(/^\/api\/public-portal\/([0-9a-fA-F]{32})$/);
 if(publicPortalAction&&req.method==='POST'){
   const token=publicPortalAction[1].toUpperCase(),body=await req.json();
