@@ -181,7 +181,9 @@ export async function queueStorageSync(resource: string, recordId: string, paylo
 }
 
 export async function getSyncQueue(): Promise<SyncQueueItem[]> {
-  try { return await idbAll<SyncQueueItem>(QUEUE_STORE); } catch { return []; }
+  try {
+    return (await idbAll<SyncQueueItem>(QUEUE_STORE)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  } catch { return []; }
 }
 
 export async function getPendingSyncCount() {
@@ -208,6 +210,22 @@ async function syncItem(item: SyncQueueItem) {
   return true;
 }
 
+async function syncBatch(items: SyncQueueItem[]): Promise<{ processed: string[]; failed: string[] } | null> {
+  const response = await fetch(`${API_URL}/sync/records/batch`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ items }),
+  });
+  // Support an older server while a backend update is rolling out.
+  if (!response.headers.get("content-type")?.includes("application/json")) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const result = await response.json() as { processed?: string[]; failed?: Array<{ id?: string }> };
+  return {
+    processed: Array.isArray(result.processed) ? result.processed : [],
+    failed: Array.isArray(result.failed) ? result.failed.map((entry) => String(entry.id || "")) : [],
+  };
+}
+
 export async function syncPending() {
   if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return;
   if (syncInProgress) {
@@ -220,20 +238,38 @@ export async function syncPending() {
     do {
       syncRequested = false;
       const queue = await getSyncQueue();
-      for (const item of queue) {
+      for (let offset = 0; offset < queue.length; offset += 50) {
+        const batch = queue.slice(offset, offset + 50);
         try {
-          const ok = await syncItem(item);
-          if (ok) {
-            await idbDelete(QUEUE_STORE, item.id);
-            synced += 1;
+          const result = await syncBatch(batch);
+          if (result) {
+            const processed = new Set(result.processed);
+            const failed = new Set(result.failed);
+            for (const item of batch) {
+              if (processed.has(item.id)) {
+                await idbDelete(QUEUE_STORE, item.id);
+                synced += 1;
+              } else if (failed.has(item.id)) {
+                await idbPut(QUEUE_STORE, { ...item, attempts: item.attempts + 1, lastError: "Falha ao sincronizar registro" });
+              }
+            }
+            continue;
+          }
+          // Compatibility path for servers without the batch endpoint.
+          for (const item of batch) {
+            try {
+              if (await syncItem(item)) {
+                await idbDelete(QUEUE_STORE, item.id);
+                synced += 1;
+              }
+            } catch (error) {
+              await idbPut(QUEUE_STORE, { ...item, attempts: item.attempts + 1, lastError: error instanceof Error ? error.message : "Falha de sincronização" });
+            }
           }
         } catch (error) {
-          await idbPut(QUEUE_STORE, {
-            ...item,
-            attempts: item.attempts + 1,
-            lastError: error instanceof Error ? error.message : "Falha de sincronização",
-          });
-          // Não bloqueia os demais itens.
+          for (const item of batch) {
+            await idbPut(QUEUE_STORE, { ...item, attempts: item.attempts + 1, lastError: error instanceof Error ? error.message : "Falha de sincronização" });
+          }
         }
       }
     } while (syncRequested);
