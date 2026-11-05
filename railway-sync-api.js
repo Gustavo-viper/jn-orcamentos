@@ -24,6 +24,7 @@ await sql`CREATE TABLE IF NOT EXISTS app_sync_records (
 )`;
 
 const syncResources = new Set(['clients','products','services','quotes','workOrders','finance','activities','settings']);
+const syncResourceName = resource => resource==='work_orders'?'workOrders':resource;
 const digestToken = async (token) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))), b => b.toString(16).padStart(2,'0')).join('');
 const authUser = async (req) => {
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -206,13 +207,13 @@ if (u.pathname === '/api/sync/state' && req.method === 'GET') {
 if (u.pathname === '/api/sync/bootstrap' && req.method === 'POST') {
   const user=await authUser(req); if(!user)return J({error:'Sessão inválida ou expirada.'},401);
   const b=await req.json(), records=Array.isArray(b.records)?b.records:[];
-  if(records.length>10000 || records.some(r=>!syncResources.has(String(r.resource)) || !String(r.id||'') || !r.data || typeof r.data!=='object')) return J({error:'Carga inicial inválida.'},400);
+  if(records.length>10000 || records.some(r=>!syncResources.has(syncResourceName(String(r.resource))) || !String(r.id||'') || !r.data || typeof r.data!=='object')) return J({error:'Carga inicial inválida.'},400);
   const inserted=await sql.begin(async tx=>{
     const gate=await tx`SELECT NOT EXISTS(SELECT 1 FROM app_sync_records) AS empty`;
     if(!gate[0]?.empty)return 0;
     let count=0;
     for(const record of records){
-      const rows=await tx`INSERT INTO app_sync_records(resource,record_id,data,updated_by) VALUES(${record.resource},${String(record.id)},${JSON.stringify(record.data)}::jsonb,${user.id}) ON CONFLICT(resource,record_id) DO NOTHING RETURNING record_id`;
+      const rows=await tx`INSERT INTO app_sync_records(resource,record_id,data,updated_by) VALUES(${syncResourceName(String(record.resource))},${String(record.id)},${JSON.stringify(record.data)}::jsonb,${user.id}) ON CONFLICT(resource,record_id) DO NOTHING RETURNING record_id`;
       count+=rows.length;
     }
     return count;
@@ -222,10 +223,11 @@ if (u.pathname === '/api/sync/bootstrap' && req.method === 'POST') {
 if (u.pathname === '/api/sync/records/batch' && req.method === 'POST') {
   const user=await authUser(req); if(!user)return J({error:'Sessão inválida ou expirada.'},401);
   const b=await req.json(),items=Array.isArray(b.items)?b.items:[];
-  if(!items.length||items.length>50||items.some(item=>!String(item.id||'')||!syncResources.has(String(item.resource||''))||!String(item.recordId||'')||!['create','update','remove'].includes(item.operation)||(['create','update'].includes(item.operation)&&(!item.payload||typeof item.payload!=='object'||Array.isArray(item.payload)))))return J({error:'Lote de alterações inválido.'},400);
+  if(!items.length||items.length>50)return J({error:'Lote de alterações inválido.'},400);
   const processed=[],failed=[];
   for(const item of items){
-    const resource=String(item.resource),recordId=String(item.recordId),payload=item.payload&&typeof item.payload==='object'?item.payload:{};
+    const resource=syncResourceName(String(item.resource)),recordId=String(item.recordId),payload=item.payload&&typeof item.payload==='object'?item.payload:{};
+    if(!String(item.id||'')||!syncResources.has(resource)||!recordId||!['create','update','remove'].includes(item.operation)||(['create','update'].includes(item.operation)&&(!item.payload||typeof item.payload!=='object'||Array.isArray(item.payload)))){failed.push({id:String(item.id||''),error:'Registro inválido na fila de sincronização'});continue;}
     try{
       if(item.operation==='remove')await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},'{}'::jsonb,true,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET is_deleted=true,updated_at=now(),updated_by=${user.id}`;
       else if(item.operation==='update')await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=app_sync_records.data||EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
@@ -237,7 +239,7 @@ if (u.pathname === '/api/sync/records/batch' && req.method === 'POST') {
 }
 if (u.pathname === '/api/sync/records' && req.method === 'POST') {
   const user=await authUser(req); if(!user)return J({error:'Sessão inválida ou expirada.'},401);
-  const b=await req.json(), resource=String(b.resource||''), recordId=String(b.recordId||'');
+  const b=await req.json(), resource=syncResourceName(String(b.resource||'')), recordId=String(b.recordId||'');
   if(!syncResources.has(resource) || !recordId || recordId.length>200 || !['create','update','remove'].includes(b.operation)) return J({error:'Alteração inválida.'},400);
   const payload=b.payload && typeof b.payload==='object' && !Array.isArray(b.payload) ? b.payload : {};
   if(b.operation==='remove') await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},'{}'::jsonb,true,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET is_deleted=true,updated_at=now(),updated_by=${user.id}`;
