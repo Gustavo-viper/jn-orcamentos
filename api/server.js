@@ -103,9 +103,18 @@ const sendVerificationEmail = async (email,code) => {
   } catch {
     throw new Error('EMAIL_WEBHOOK_UNREACHABLE');
   }
-  const result = await response.json().catch(()=>null);
+  const responseText = await response.text().catch(()=> '');
+  let result = null;
+  try { result = JSON.parse(responseText); }
+  catch {
+    const sample = responseText.slice(0,6000).toLowerCase();
+    if (/accounts\\.google\\.com|sign in|choose an account|login required/i.test(sample)) throw new Error('EMAIL_WEBHOOK_LOGIN_REQUIRED');
+    if (/script function not found.{0,60}dopost|function not found.{0,60}dopost/i.test(sample)) throw new Error('EMAIL_WEBHOOK_DOPOST_NOT_FOUND');
+    if (response.headers.get('content-type')?.toLowerCase().includes('text/html')) throw new Error('EMAIL_WEBHOOK_HTML_RESPONSE');
+    throw new Error('EMAIL_WEBHOOK_INVALID_RESPONSE');
+  }
   if (!response.ok) throw new Error('EMAIL_WEBHOOK_HTTP_STATUS');
-  if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') throw new Error('EMAIL_WEBHOOK_INVALID_RESPONSE');
+  if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') throw new Error('EMAIL_WEBHOOK_UNEXPECTED_JSON');
   if (result.ok !== true) {
     const reason = String(result.error || '');
     const knownReasons = {
@@ -126,7 +135,11 @@ const emailDeliveryMessage = error => {
     EMAIL_WEBHOOK_INVALID_URL: 'A URL do Apps Script configurada no Railway é inválida.',
     EMAIL_WEBHOOK_UNREACHABLE: 'Não foi possível conectar ao Apps Script. Confira a implantação e a URL terminada em /exec.',
     EMAIL_WEBHOOK_HTTP_STATUS: 'O Apps Script recusou a chamada. Confira se a implantação está publicada para acesso externo.',
-    EMAIL_WEBHOOK_INVALID_RESPONSE: 'O Apps Script respondeu em formato inesperado. Confira se a URL é da implantação /exec.',
+    EMAIL_WEBHOOK_LOGIN_REQUIRED: 'A implantação do Apps Script exige login. Reimplante como App da Web, execute como você e defina o acesso como qualquer pessoa.',
+    EMAIL_WEBHOOK_DOPOST_NOT_FOUND: 'A implantação do Apps Script não tem a função doPost. Salve o Code.gs e publique uma nova versão do App da Web.',
+    EMAIL_WEBHOOK_HTML_RESPONSE: 'O Google retornou uma página em vez da confirmação. Configure o App da Web para acesso de qualquer pessoa e use a URL /exec da versão atual.',
+    EMAIL_WEBHOOK_INVALID_RESPONSE: 'O Apps Script não retornou JSON. Salve o Code.gs e publique uma nova versão do App da Web com acesso de qualquer pessoa.',
+    EMAIL_WEBHOOK_UNEXPECTED_JSON: 'A implantação respondeu em JSON, mas não é a versão atual do script. Publique uma nova versão do App da Web.',
     EMAIL_WEBHOOK_SECRET_MISMATCH: 'A chave de integração não confere: EMAIL_WEBHOOK_SECRET no Railway deve ser igual a JNG_APP_SHARED_SECRET nas propriedades do Apps Script.',
     EMAIL_WEBHOOK_SENDER_MISMATCH: 'A conta remetente do Apps Script não confere com EXPECTED_SENDER_EMAIL ou a implantação foi publicada por outra conta.',
     EMAIL_WEBHOOK_INVALID_REQUEST: 'O Apps Script recebeu dados de confirmação inválidos.',
