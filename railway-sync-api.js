@@ -192,6 +192,7 @@ if (u.pathname === '/api/auth/register' && req.method === 'POST') {
   const b=await req.json(), username=['Jefersson','Giovane'].find(n=>n.toLowerCase()===String(b.name||'').trim().toLowerCase());
   const email=normalizeEmail(b.email);
   if (!username || !isValidEmail(email) || typeof b.password!=='string' || b.password.length<8 || b.password.length>128) return J({error:'Informe a conta, um e-mail válido e uma senha de 8 a 128 caracteres.'},400);
+  if (!Bun.env.EMAIL_WEBHOOK_URL || !Bun.env.EMAIL_WEBHOOK_SECRET || !Bun.env.EMAIL_VERIFICATION_SECRET) return J({error:'A confirmação por e-mail ainda não está configurada no servidor.'},503);
   const expectedCode=String(Bun.env.APP_ENROLLMENT_CODE||'').replace(/[\s-]/g,'').toUpperCase();
   const suppliedCode=String(b.enrollmentCode||'').replace(/[\s-]/g,'').toUpperCase();
   if (!expectedCode || suppliedCode !== expectedCode) return J({error:'Código de ativação inválido.'},403);
@@ -268,7 +269,7 @@ if (u.pathname === '/api/auth/login' && req.method === 'POST') {
   const b=await req.json(), username=['Jefersson','Giovane'].find(n=>n.toLowerCase()===String(b.name||'').trim().toLowerCase());
   const rows=username?await sql`SELECT id,username,password_hash,email_verified_at FROM app_users WHERE username=${username}`:[];
   if (!rows.length || typeof b.password!=='string' || !await Bun.password.verify(b.password,rows[0].password_hash)) return J({error:'Usuário ou senha incorretos.'},401);
-  if (!rows[0].email_verified_at) return J({error:'Confirme o e-mail cadastrado antes de entrar.'},403);
+  if (rows[0].email && !rows[0].email_verified_at) return J({error:'Confirme o e-mail cadastrado antes de entrar.'},403);
   const token=crypto.randomUUID()+crypto.randomUUID();
   await sql`INSERT INTO app_sessions(token_hash,user_id,expires_at) VALUES(${await digestToken(token)},${rows[0].id},now()+interval '90 days')`;
   return J({user:rows[0].username,token});
