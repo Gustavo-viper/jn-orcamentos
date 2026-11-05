@@ -1,11 +1,30 @@
 {
-  "name": "J&N Decorações em Gesso",
-  "short_name": "J&N Gesso",
-  "description": "Sistema de gestão de orçamentos, obras, estoque e financeiro da J&N Decorações em Gesso.",
+  "id": "/",
+  "name": "J&N Orçamentos",
+  "short_name": "J&N Orçamentos",
+  "description": "Orçamentos, clientes e serviços da J&N Decorações em Gesso.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#f5f1ea",
   "theme_color": "#4a2c1a",
   "lang": "pt-BR",
-  "icons": []
+  "prefer_related_applications": false,
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
 }
+

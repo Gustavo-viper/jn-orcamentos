@@ -4,6 +4,7 @@ import { AdminLayout } from "@/layouts/AdminLayout";
 import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { Toaster } from "@/components/ui";
 import { Logo } from "@/components/Logo";
+import { PwaInstallButton } from "@/components/PwaInstallButton";
 import { AuthGate } from "@/components/AuthGate";
 import DashboardPage from "@/pages/DashboardPage";
 import CalculatorPage from "@/pages/CalculatorPage";
@@ -43,9 +44,11 @@ export default function App() {
   if (!loaded) return <SplashScreen />;
 
   return (
-    <HashRouter>
-      <Toaster />
-      <Routes>
+    <>
+      <PwaInstallButton />
+      <HashRouter>
+        <Toaster />
+        <Routes>
         <Route path="/portal/orcamento/:token" element={<PortalQuotePage />} />
         <Route element={<AuthGate><AdminLayout /></AuthGate>}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -64,8 +67,9 @@ export default function App() {
           <Route path="/configuracoes" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
-      </Routes>
-    </HashRouter>
+        </Routes>
+      </HashRouter>
+    </>
   );
 }
 

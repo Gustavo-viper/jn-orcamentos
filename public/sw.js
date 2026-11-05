@@ -1,4 +1,4 @@
-const CACHE = "jn-gesso-shell-v2";
+const CACHE = "jn-gesso-shell-v3";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -18,7 +18,7 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   // Never cache API responses or cross-origin content; they may contain private or stale data.
-  if (url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin || url.pathname === "/api" || url.pathname.startsWith("/api/")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(
@@ -37,3 +37,4 @@ self.addEventListener("fetch", (event) => {
     }),
   );
 });
+

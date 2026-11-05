@@ -8,6 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/create-pwa-icons.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "desktop:dev": "npm run build -- --configLoader runner && electron .",
@@ -80,3 +81,4 @@
     }]
   }
 }
+

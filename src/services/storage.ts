@@ -511,7 +511,11 @@ export async function hasSharedState() {
 
 export async function checkApiConnection() {
   if (!API_URL || typeof navigator === "undefined") return false;
-  try { const response = await fetch(`${API_URL}/health`, { cache: "no-store" }); return response.ok; } catch { return false; }
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, { headers: authHeaders(), cache: "no-store" });
+    // A 401 still confirms that the API is reachable when no session is present.
+    return response.ok || response.status === 401;
+  } catch { return false; }
 }
 
 export function startSyncEngine() {
@@ -572,3 +576,4 @@ export function createRepository<T extends { id: string }>(key: string, seed: T[
     },
   };
 }
+
