@@ -1,4 +1,38 @@
 import { sql } from 'bun';
+import { extname, resolve, sep } from 'node:path';
+
+
+
+const staticRoot = resolve(import.meta.dir, 'dist');
+const staticMimeTypes = {
+  '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
+  '.json':'application/json; charset=utf-8', '.webmanifest':'application/manifest+json', '.png':'image/png',
+  '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.woff2':'font/woff2'
+};
+const serveFrontend = async (req, url) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return null;
+  let decodedPath;
+  try { decodedPath = decodeURIComponent(url.pathname); }
+  catch { return new Response('Bad request', { status: 400 }); }
+  const relativePath = decodedPath.replace(/^\/+/, '') || 'index.html';
+  let filePath = resolve(staticRoot, relativePath);
+  if (filePath !== staticRoot && !filePath.startsWith(staticRoot + sep)) return new Response('Not found', { status: 404 });
+  let file = Bun.file(filePath);
+  if (!(await file.exists())) {
+    filePath = resolve(staticRoot, 'index.html');
+    file = Bun.file(filePath);
+  }
+  if (!(await file.exists())) return new Response('App assets are unavailable', { status: 503 });
+  const extension = extname(filePath).toLowerCase();
+  const noCache = ['index.html', 'sw.js', 'manifest.webmanifest'].includes(relativePath);
+  const headers = {
+    'content-type': staticMimeTypes[extension] || 'application/octet-stream',
+    'cache-control': noCache ? 'no-cache' : 'public, max-age=3600',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'strict-origin-when-cross-origin'
+  };
+  return new Response(req.method === 'HEAD' ? null : file, { status: 200, headers });
+};
 
 const num = value => { const parsed=Number(value); return Number.isFinite(parsed)?parsed:0; };
 const esc = value => String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');
@@ -345,6 +379,10 @@ if (u.pathname === '/api/sync/records' && req.method === 'POST') {
 }
 
 
+    if (u.pathname !== '/api' && !u.pathname.startsWith('/api/') && u.pathname !== '/portal' && !u.pathname.startsWith('/portal/')) {
+      const frontend = await serveFrontend(req, u);
+      if (frontend) return frontend;
+    }
     return J({error:'Rota não encontrada.'},404);
   } catch (error) {
     console.error('API request failed:',error?.message||error);

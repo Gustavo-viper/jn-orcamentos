@@ -57,11 +57,6 @@ function proxyApi(request, response) {
 }
 
 const server = http.createServer((request, response) => {
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    response.writeHead(405, { Allow: "GET, HEAD" });
-    return response.end("Method not allowed");
-  }
-
   let pathname;
   try {
     pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
@@ -70,12 +65,17 @@ const server = http.createServer((request, response) => {
     return response.end("Bad request");
   }
 
+  if (pathname === "/api" || pathname.startsWith("/api/")) return proxyApi(request, response);
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    response.writeHead(405, { Allow: "GET, HEAD" });
+    return response.end("Method not allowed");
+  }
+
   if (pathname === "/health") {
     response.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
     return response.end(JSON.stringify({ ok: true }));
   }
-
-  if (pathname === "/api" || pathname.startsWith("/api/")) return proxyApi(request, response);
 
   const relativePath = pathname.replace(/^\/+/, "") || "index.html";
   const filePath = path.resolve(DIST_DIR, relativePath);
