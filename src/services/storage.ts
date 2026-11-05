@@ -73,8 +73,10 @@ async function idbPut(storeName: string, value: unknown, key?: IDBValidKey) {
   return new Promise<void>((resolve, reject) => {
     const tx = db.transaction(storeName, "readwrite");
     const request = key === undefined ? tx.objectStore(storeName).put(value) : tx.objectStore(storeName).put(value, key);
-    request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? request.error ?? new Error("Falha ao gravar no IndexedDB"));
+    tx.onabort = () => reject(tx.error ?? request.error ?? new Error("Gravação cancelada no IndexedDB"));
   });
 }
 
@@ -124,9 +126,14 @@ function fallbackWrite<T>(key: string, value: T) {
 export async function readStorageAsync<T>(key: string, fallback: T): Promise<T> {
   try {
     const value = await idbGet<T>(STORE, key);
-    if (value !== undefined) return value;
+    if (value !== undefined) {
+      // Rebuild the local backup from installations that only wrote to IndexedDB.
+      fallbackWrite(key, value);
+      return value;
+    }
     const legacy = fallbackRead<T>(key, fallback);
     await idbPut(STORE, legacy, key);
+    fallbackWrite(key, legacy);
     return legacy;
   } catch {
     return fallbackRead(key, fallback);
@@ -142,8 +149,12 @@ export async function writeStorageAsync<T>(key: string, value: T) {
   try {
     await idbPut(STORE, value, key);
   } catch {
+    // The synchronous local copy keeps data recoverable if IndexedDB is reset.
     fallbackWrite(key, value);
+    return;
   }
+  // Always mirror successful IndexedDB writes, not only failures.
+  fallbackWrite(key, value);
 }
 
 export function writeStorage<T>(key: string, value: T) {
@@ -159,6 +170,25 @@ export async function clearAllStorage() {
   } catch { /* ignore */ }
 }
 
+function writeQueueBackup(queue: SyncQueueItem[]) {
+  fallbackWrite(QUEUE_STORE, queue);
+}
+
+async function deleteQueuedItem(id: string) {
+  const queue = await getSyncQueue();
+  writeQueueBackup(queue.filter((item) => item.id !== id));
+  try { await idbDelete(QUEUE_STORE, id); } catch { /* local backup remains authoritative */ }
+}
+
+async function updateQueuedItem(item: SyncQueueItem) {
+  const queue = await getSyncQueue();
+  const next = queue.some((queued) => queued.id === item.id)
+    ? queue.map((queued) => queued.id === item.id ? item : queued)
+    : [...queue, item];
+  writeQueueBackup(next);
+  try { await idbPut(QUEUE_STORE, item); } catch { /* local backup remains authoritative */ }
+}
+
 async function enqueue(resource: string, operation: SyncOperation, recordId?: string, payload?: unknown) {
   const id = typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -172,7 +202,9 @@ async function enqueue(resource: string, operation: SyncOperation, recordId?: st
     createdAt: new Date().toISOString(),
     attempts: 0,
   };
-  try { await idbPut(QUEUE_STORE, item); } catch { /* offline storage failure */ }
+  const existing = await getSyncQueue();
+  writeQueueBackup([...existing.filter((queued) => queued.id !== item.id), item]);
+  try { await idbPut(QUEUE_STORE, item); } catch { /* offline storage backup remains available */ }
   void syncPending();
 }
 
@@ -181,9 +213,22 @@ export async function queueStorageSync(resource: string, recordId: string, paylo
 }
 
 export async function getSyncQueue(): Promise<SyncQueueItem[]> {
+  const backup = fallbackRead<SyncQueueItem[]>(QUEUE_STORE, []);
   try {
-    return (await idbAll<SyncQueueItem>(QUEUE_STORE)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  } catch { return []; }
+    const stored = await idbAll<SyncQueueItem>(QUEUE_STORE);
+    const byId = new Map<string, SyncQueueItem>();
+    for (const item of [...backup, ...stored]) byId.set(item.id, item);
+    const queue = [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    writeQueueBackup(queue);
+    for (const item of queue) {
+      if (!stored.some((saved) => saved.id === item.id)) {
+        try { await idbPut(QUEUE_STORE, item); } catch { /* queue remains in local backup */ }
+      }
+    }
+    return queue;
+  } catch {
+    return backup.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
 }
 
 export async function getPendingSyncCount() {
@@ -249,10 +294,10 @@ export async function syncPending() {
             const failed = new Set(result.failed);
             for (const item of batch) {
               if (processed.has(item.id)) {
-                await idbDelete(QUEUE_STORE, item.id);
+                await deleteQueuedItem(item.id);
                 synced += 1;
               } else if (failed.has(item.id)) {
-                await idbPut(QUEUE_STORE, { ...item, attempts: item.attempts + 1, lastError: "Falha ao sincronizar registro" });
+                await updateQueuedItem({ ...item, attempts: item.attempts + 1, lastError: "Falha ao sincronizar registro" });
               }
             }
             continue;
@@ -261,16 +306,16 @@ export async function syncPending() {
           for (const item of batch) {
             try {
               if (await syncItem(item)) {
-                await idbDelete(QUEUE_STORE, item.id);
+                await deleteQueuedItem(item.id);
                 synced += 1;
               }
             } catch (error) {
-              await idbPut(QUEUE_STORE, { ...item, attempts: item.attempts + 1, lastError: error instanceof Error ? error.message : "Falha de sincronização" });
+              await updateQueuedItem({ ...item, attempts: item.attempts + 1, lastError: error instanceof Error ? error.message : "Falha de sincronização" });
             }
           }
         } catch (error) {
           for (const item of batch) {
-            await idbPut(QUEUE_STORE, { ...item, attempts: item.attempts + 1, lastError: error instanceof Error ? error.message : "Falha de sincronização" });
+            await updateQueuedItem({ ...item, attempts: item.attempts + 1, lastError: error instanceof Error ? error.message : "Falha de sincronização" });
           }
         }
       }
