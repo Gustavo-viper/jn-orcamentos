@@ -219,6 +219,22 @@ if (u.pathname === '/api/sync/bootstrap' && req.method === 'POST') {
   });
   return J({ok:true,inserted});
 }
+if (u.pathname === '/api/sync/records/batch' && req.method === 'POST') {
+  const user=await authUser(req); if(!user)return J({error:'Sessão inválida ou expirada.'},401);
+  const b=await req.json(),items=Array.isArray(b.items)?b.items:[];
+  if(!items.length||items.length>50||items.some(item=>!String(item.id||'')||!syncResources.has(String(item.resource||''))||!String(item.recordId||'')||!['create','update','remove'].includes(item.operation)||(['create','update'].includes(item.operation)&&(!item.payload||typeof item.payload!=='object'||Array.isArray(item.payload)))))return J({error:'Lote de alterações inválido.'},400);
+  const processed=[],failed=[];
+  for(const item of items){
+    const resource=String(item.resource),recordId=String(item.recordId),payload=item.payload&&typeof item.payload==='object'?item.payload:{};
+    try{
+      if(item.operation==='remove')await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},'{}'::jsonb,true,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET is_deleted=true,updated_at=now(),updated_by=${user.id}`;
+      else if(item.operation==='update')await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=app_sync_records.data||EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
+      else await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
+      processed.push(String(item.id));
+    }catch(error){failed.push({id:String(item.id),error:String(error?.message||'Falha ao sincronizar')});}
+  }
+  return J({ok:failed.length===0,processed,failed});
+}
 if (u.pathname === '/api/sync/records' && req.method === 'POST') {
   const user=await authUser(req); if(!user)return J({error:'Sessão inválida ou expirada.'},401);
   const b=await req.json(), resource=String(b.resource||''), recordId=String(b.recordId||'');
