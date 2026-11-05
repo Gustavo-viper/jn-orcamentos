@@ -90,14 +90,50 @@ const verificationDigest = async (userId,email,code) => {
 };
 const constantTimeEqual = (left,right) => { if (left.length !== right.length) return false; let diff = 0; for (let i=0;i<left.length;i++) diff |= left.charCodeAt(i) ^ right.charCodeAt(i); return diff === 0; };
 const sendVerificationEmail = async (email,code) => {
-  const endpoint = String(Bun.env.EMAIL_WEBHOOK_URL || '');
+  const endpoint = String(Bun.env.EMAIL_WEBHOOK_URL || '').trim();
   const secret = String(Bun.env.EMAIL_WEBHOOK_SECRET || '');
   if (!endpoint || !secret) throw new Error('EMAIL_SENDER_NOT_CONFIGURED');
-  const parsed = new URL(endpoint);
+  let parsed;
+  try { parsed = new URL(endpoint); }
+  catch { throw new Error('EMAIL_WEBHOOK_INVALID_URL'); }
   if (parsed.protocol !== 'https:') throw new Error('EMAIL_SENDER_REQUIRES_HTTPS');
-  const response = await fetch(parsed,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({secret,to:email,code})});
+  let response;
+  try {
+    response = await fetch(parsed,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({secret,to:email,code}),signal:AbortSignal.timeout(20000)});
+  } catch {
+    throw new Error('EMAIL_WEBHOOK_UNREACHABLE');
+  }
   const result = await response.json().catch(()=>null);
-  if (!response.ok || result?.ok !== true) throw new Error('EMAIL_DELIVERY_FAILED');
+  if (!response.ok) throw new Error('EMAIL_WEBHOOK_HTTP_STATUS');
+  if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') throw new Error('EMAIL_WEBHOOK_INVALID_RESPONSE');
+  if (result.ok !== true) {
+    const reason = String(result.error || '');
+    const knownReasons = {
+      unauthorized: 'EMAIL_WEBHOOK_SECRET_MISMATCH',
+      sender_mismatch: 'EMAIL_WEBHOOK_SENDER_MISMATCH',
+      invalid_request: 'EMAIL_WEBHOOK_INVALID_REQUEST',
+      delivery_failed: 'EMAIL_WEBHOOK_DELIVERY_FAILED',
+    };
+    throw new Error(knownReasons[reason] || 'EMAIL_WEBHOOK_REJECTED');
+  }
+};
+const emailDeliveryMessage = error => {
+  const issue = String(error?.message || 'EMAIL_WEBHOOK_REJECTED');
+  console.error('Account confirmation email failed:', issue);
+  const messages = {
+    EMAIL_SENDER_NOT_CONFIGURED: 'O envio de e-mail ainda não está configurado no Railway.',
+    EMAIL_SENDER_REQUIRES_HTTPS: 'A URL do Apps Script precisa usar HTTPS.',
+    EMAIL_WEBHOOK_INVALID_URL: 'A URL do Apps Script configurada no Railway é inválida.',
+    EMAIL_WEBHOOK_UNREACHABLE: 'Não foi possível conectar ao Apps Script. Confira a implantação e a URL terminada em /exec.',
+    EMAIL_WEBHOOK_HTTP_STATUS: 'O Apps Script recusou a chamada. Confira se a implantação está publicada para acesso externo.',
+    EMAIL_WEBHOOK_INVALID_RESPONSE: 'O Apps Script respondeu em formato inesperado. Confira se a URL é da implantação /exec.',
+    EMAIL_WEBHOOK_SECRET_MISMATCH: 'A chave de integração não confere: EMAIL_WEBHOOK_SECRET no Railway deve ser igual a JNG_APP_SHARED_SECRET nas propriedades do Apps Script.',
+    EMAIL_WEBHOOK_SENDER_MISMATCH: 'A conta remetente do Apps Script não confere com EXPECTED_SENDER_EMAIL ou a implantação foi publicada por outra conta.',
+    EMAIL_WEBHOOK_INVALID_REQUEST: 'O Apps Script recebeu dados de confirmação inválidos.',
+    EMAIL_WEBHOOK_DELIVERY_FAILED: 'O Apps Script recebeu a solicitação, mas o Google Mail não enviou. Verifique a autorização do MailApp e o limite de envio.',
+    EMAIL_WEBHOOK_REJECTED: 'O Apps Script não aceitou o envio. Confira as configurações de segredo e remetente.',
+  };
+  return messages[issue] || messages.EMAIL_WEBHOOK_REJECTED;
 };
 const authUser = async (req) => {
   const token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
@@ -257,7 +293,7 @@ if (u.pathname === '/api/auth/register' && req.method === 'POST') {
     const codeHash=await verificationDigest(userId,email,code);
     await sql`INSERT INTO app_email_verifications(user_id,email,code_hash,expires_at,sent_at,attempts) VALUES(${userId},${email},${codeHash},now()+interval '10 minutes',now(),0) ON CONFLICT(user_id) DO UPDATE SET email=EXCLUDED.email,code_hash=EXCLUDED.code_hash,expires_at=EXCLUDED.expires_at,sent_at=now(),attempts=0`;
     try { await sendVerificationEmail(email,code); }
-    catch (error) { await sql`DELETE FROM app_email_verifications WHERE user_id=${userId}`; return J({error:'Não foi possível enviar o código. O envio de e-mail ainda precisa ser configurado.'},503); }
+    catch (error) { const message=emailDeliveryMessage(error); await sql`DELETE FROM app_email_verifications WHERE user_id=${userId}`; return J({error:message},503); }
     return J({ok:true,emailMasked:maskEmail(email)},202);
   } catch (error) {
     if (String(error?.code)==='23505') return J({error:'Este e-mail já está associado a outra conta.'},409);
@@ -275,7 +311,7 @@ if (u.pathname === '/api/auth/resend-verification' && req.method === 'POST') {
   const code=generateEmailCode(), codeHash=await verificationDigest(userId,email,code);
   await sql`INSERT INTO app_email_verifications(user_id,email,code_hash,expires_at,sent_at,attempts) VALUES(${userId},${email},${codeHash},now()+interval '10 minutes',now(),0) ON CONFLICT(user_id) DO UPDATE SET email=EXCLUDED.email,code_hash=EXCLUDED.code_hash,expires_at=EXCLUDED.expires_at,sent_at=now(),attempts=0`;
   try { await sendVerificationEmail(email,code); }
-  catch (error) { await sql`DELETE FROM app_email_verifications WHERE user_id=${userId}`; return J({error:'Não foi possível enviar o código. O envio de e-mail ainda precisa ser configurado.'},503); }
+  catch (error) { const message=emailDeliveryMessage(error); await sql`DELETE FROM app_email_verifications WHERE user_id=${userId}`; return J({error:message},503); }
   return J({ok:true,emailMasked:maskEmail(email)});
 }
 if (u.pathname === '/api/auth/verify-email' && req.method === 'POST') {
