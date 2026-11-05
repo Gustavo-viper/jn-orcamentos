@@ -24,12 +24,13 @@ import {
   workOrderService,
 } from "@/services";
 import { addDays, genToken, pad, uid } from "@/utils/format";
-import { hasSharedState, pullSharedState, pushInitialSharedState } from "@/services/storage";
+import { pullSharedState, pushInitialSharedState } from "@/services/storage";
 
 let sharedRefreshTimer: number | undefined;
 let sharedRefreshPromise: Promise<void> | undefined;
 let initPromise: Promise<void> | undefined;
 let sharedRefreshEventsAttached = false;
+let sharedBootstrapDone = false;
 
 const sameData = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
 const activityTypes = new Set<Activity["type"]>(["quote", "order", "finance", "client"]);
@@ -63,8 +64,7 @@ async function refreshSharedState() {
     };
 
     try {
-      const hasCloud = await hasSharedState();
-      if (!hasCloud) await pushInitialSharedState(shared);
+      if (!sharedBootstrapDone) sharedBootstrapDone = await pushInitialSharedState(shared);
       const pulled = await pullSharedState(shared);
       const secureQuotes = pulled.quotes.map((quote) => ({
         ...quote,

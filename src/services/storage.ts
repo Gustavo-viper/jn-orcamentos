@@ -270,25 +270,32 @@ async function updateQueuedItem(item: SyncQueueItem) {
   try { await idbPut(QUEUE_STORE, item); } catch { /* local backup remains authoritative */ }
 }
 
-async function enqueue(resource: string, operation: SyncOperation, recordId?: string, payload?: unknown) {
-  const id = typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const item: SyncQueueItem = {
-    id,
-    resource,
-    operation,
-    recordId,
-    payload,
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-  };
+async function enqueueMany(entries: Array<{ resource: string; operation: SyncOperation; recordId?: string; payload?: unknown }>) {
+  if (!entries.length) return;
   const existing = await getSyncQueue();
+  const now = new Date().toISOString();
+  const items: SyncQueueItem[] = entries.map((entry) => ({
+    id: typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    resource: entry.resource,
+    operation: entry.operation,
+    recordId: entry.recordId,
+    payload: entry.payload,
+    createdAt: now,
+    attempts: 0,
+  }));
   const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
-  if (desktopStorage) await desktopStorage.upsertQueue(item);
-  writeQueueBackup([...existing.filter((queued) => queued.id !== item.id), item]);
-  try { await idbPut(QUEUE_STORE, item); } catch { /* offline storage backup remains available */ }
+  if (desktopStorage) for (const item of items) await desktopStorage.upsertQueue(item);
+  writeQueueBackup([...existing.filter((queued) => !items.some((item) => item.id === queued.id)), ...items]);
+  for (const item of items) {
+    try { await idbPut(QUEUE_STORE, item); } catch { /* queue backup remains available */ }
+  }
   void syncPending();
+}
+
+async function enqueue(resource: string, operation: SyncOperation, recordId?: string, payload?: unknown) {
+  await enqueueMany([{ resource, operation, recordId, payload }]);
 }
 
 export async function queueStorageSync(resource: string, recordId: string, payload: unknown) {
@@ -485,21 +492,25 @@ export async function pullSharedState<T extends Record<string, unknown>>(local: 
   return result as T;
 }
 
-export async function pushInitialSharedState(state: Record<string, unknown>) {
-  if (!API_URL || !localStorage.getItem(TOKEN_KEY)) return;
+export async function pushInitialSharedState(state: Record<string, unknown>): Promise<boolean> {
+  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return false;
   const records: { resource: string; id: string; data: unknown }[] = [];
   for (const [resource, value] of Object.entries(state)) {
     if (Array.isArray(value)) {
-      for (const record of value as { id: string }[]) {
-        records.push({ resource, id: record.id, data: record });
+      for (const record of value) {
+        if (!record || typeof record !== "object" || Array.isArray(record)) continue;
+        const id = (record as { id?: unknown }).id;
+        if (typeof id === "string" && id.trim()) records.push({ resource, id, data: record });
       }
-    } else if (resource === "settings" && value && typeof value === "object") {
+    } else if (resource === "settings" && value && typeof value === "object" && !Array.isArray(value)) {
       records.push({ resource, id: "company", data: value });
     }
   }
   const response = await fetch(`${API_URL}/sync/bootstrap`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ records }) });
-  if (!response.ok) throw new Error(`Falha ao enviar os dados iniciais (HTTP ${response.status})`);
+  if (!response.ok) throw new Error(`Falha ao recuperar os dados locais (HTTP ${response.status})`);
+  return true;
 }
+
 
 export async function hasSharedState() {
   if (!API_URL || !localStorage.getItem(TOKEN_KEY)) return false;
@@ -570,8 +581,21 @@ export function createRepository<T extends { id: string }>(key: string, seed: T[
       await enqueue(syncResource, "remove", id);
     },
     async replaceAll(items) {
+      const previous = await load();
+      const previousById = new Map(previous.map((item) => [item.id, item]));
+      const nextById = new Map(items.map((item) => [item.id, item]));
       await save(items);
-      await enqueue(syncResource, "replaceAll", undefined, items);
+      const mutations: Array<{ resource: string; operation: SyncOperation; recordId?: string; payload?: unknown }> = [];
+      for (const item of previous) {
+        if (!nextById.has(item.id)) mutations.push({ resource: syncResource, operation: "remove", recordId: item.id });
+      }
+      for (const item of items) {
+        if (JSON.stringify(previousById.get(item.id)) !== JSON.stringify(item)) {
+          // "create" is an upsert on the server and replaces the full JSON document.
+          mutations.push({ resource: syncResource, operation: "create", recordId: item.id, payload: item });
+        }
+      }
+      await enqueueMany(mutations);
       return items;
     },
   };
