@@ -3,7 +3,8 @@ import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { toast } from "@/hooks/useToast";
 import type { CompanySettings } from "@/types";
 import { cn } from "@/utils/cn";
-import { Building2, Database, FileText, Moon, Palette, RotateCcw, Save, Sun } from "lucide-react";
+import { getOfflineStatus, syncPending, type OfflineStatus } from "@/services/offlineService";
+import { Building2, Cloud, CloudOff, Database, FileText, Moon, Palette, RefreshCw, RotateCcw, Save, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
@@ -12,10 +13,38 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<"empresa" | "orcamento" | "aparencia" | "dados">("empresa");
   const [busy, setBusy] = useState(false);
   const [reset, setReset] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<OfflineStatus | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
   useEffect(() => setF(settings), [settings]);
+  useEffect(() => {
+    let mounted = true;
+    const refresh = async () => {
+      const next = await getOfflineStatus();
+      if (mounted) setSyncStatus(next);
+    };
+    void refresh();
+    const timer = window.setInterval(() => { void refresh(); }, 5_000);
+    window.addEventListener("online", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+      window.removeEventListener("online", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, []);
 
   const set = (k: keyof CompanySettings) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setF((x) => ({ ...x, [k]: e.target.type === "number" ? Number(e.target.value) : e.target.value }));
   const save = async () => { setBusy(true); await saveSettings(f); setBusy(false); toast.success("Configurações salvas"); };
+  const syncNow = async () => {
+    setSyncBusy(true);
+    try {
+      await syncPending();
+      setSyncStatus(await getOfflineStatus());
+    } finally {
+      setSyncBusy(false);
+    }
+  };
 
   const tabs = [{ k: "empresa", l: "Empresa", i: Building2 }, { k: "orcamento", l: "Orçamento", i: FileText }, { k: "aparencia", l: "Aparência", i: Palette }, { k: "dados", l: "Dados", i: Database }] as const;
 
@@ -68,7 +97,24 @@ export default function SettingsPage() {
           )}
           {tab === "dados" && (
             <div className="space-y-4">
-              <div className="glass-subtle rounded-2xl p-4"><p className="font-semibold text-main">Armazenamento offline-first</p><p className="text-sm text-muted mt-1">Seus dados ficam neste dispositivo, no IndexedDB, com cópia de segurança no armazenamento local. Configure a URL da API para sincronizar alterações entre dispositivos.</p></div>
+              <div className="glass-subtle rounded-2xl p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    {syncStatus?.apiConfigured && syncStatus.apiOnline ? <Cloud className="h-5 w-5 text-emerald-600" /> : <CloudOff className="h-5 w-5 text-amber-600" />}
+                    <p className="font-semibold text-main">Sincronização com o Railway</p>
+                  </div>
+                  <span className={cn("rounded-full px-3 py-1 text-xs font-semibold", syncStatus?.apiConfigured && syncStatus.apiOnline ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700")}>
+                    {!syncStatus ? "Verificando conexão…" : !syncStatus.apiConfigured ? "API não configurada" : syncStatus.apiOnline ? "Conectado" : "Sem conexão"}
+                  </span>
+                </div>
+                <p className="text-sm text-muted">
+                  {!syncStatus ? "Verificando se esta instalação alcança o banco compartilhado." : !syncStatus.apiConfigured ? "Esta instalação não detectou a URL da API. Reinstale a versão mais recente para habilitar a sincronização." : syncStatus.apiOnline ? syncStatus.pending ? `${syncStatus.pending} alteração(ões) aguardando envio ao Railway.` : "As alterações deste dispositivo são enviadas ao Railway e compartilhadas com os outros usuários." : "Os dados continuam salvos neste dispositivo. O envio será retomado quando o Railway voltar a responder."}
+                </p>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/5 pt-3 text-xs text-muted dark:border-white/10">
+                  <span>Última sincronização: {syncStatus?.lastSyncAt ? new Date(syncStatus.lastSyncAt).toLocaleString("pt-BR") : "nenhuma registrada neste dispositivo"}</span>
+                  <Button size="sm" variant="secondary" icon={RefreshCw} loading={syncBusy} disabled={!syncStatus?.apiConfigured} onClick={() => { void syncNow(); }}>Sincronizar agora</Button>
+                </div>
+              </div>
               <div className="glass-subtle rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div><p className="font-semibold text-main">Restaurar dados de demonstração</p><p className="text-sm text-muted">Apaga as alterações locais e recarrega os mocks originais.</p></div><Button variant="danger" icon={RotateCcw} onClick={() => setReset(true)}>Restaurar</Button></div>
             </div>
           )}
