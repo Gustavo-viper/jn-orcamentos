@@ -1,7 +1,8 @@
-const { app, BrowserWindow, dialog, protocol, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, protocol, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const fs = require("node:fs");
 const path = require("node:path");
+const { createLocalDatabase } = require("./local-database.cjs");
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -19,6 +20,17 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const DIST_DIR = path.resolve(__dirname, "..", "dist");
+const STORAGE_CHANNELS = {
+  readState: "jn-storage:read-state",
+  writeState: "jn-storage:write-state",
+  clearAll: "jn-storage:clear-all",
+  listQueue: "jn-storage:list-queue",
+  upsertQueue: "jn-storage:upsert-queue",
+  deleteQueue: "jn-storage:delete-queue",
+  getMeta: "jn-storage:get-meta",
+  setMeta: "jn-storage:set-meta",
+};
+let localDatabase;
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -66,6 +78,7 @@ function createWindow() {
     icon: path.join(__dirname, "..", "build", "icon.png"),
     autoHideMenuBar: true,
     webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -86,6 +99,30 @@ function createWindow() {
   });
 
   void window.loadURL("jn-app://desktop/");
+}
+
+function registerStorageIpc() {
+  localDatabase = createLocalDatabase(app.getPath("userData"));
+  const handlers = {
+    [STORAGE_CHANNELS.readState]: (_event, key) => localDatabase.readState(key),
+    [STORAGE_CHANNELS.writeState]: (_event, key, value) => localDatabase.writeState(key, value),
+    [STORAGE_CHANNELS.clearAll]: () => localDatabase.clearAll(),
+    [STORAGE_CHANNELS.listQueue]: () => localDatabase.listQueue(),
+    [STORAGE_CHANNELS.upsertQueue]: (_event, item) => localDatabase.upsertQueue(item),
+    [STORAGE_CHANNELS.deleteQueue]: (_event, id) => localDatabase.deleteQueue(id),
+    [STORAGE_CHANNELS.getMeta]: (_event, key) => localDatabase.getMeta(key),
+    [STORAGE_CHANNELS.setMeta]: (_event, key, value) => localDatabase.setMeta(key, value),
+  };
+
+  for (const [channel, handler] of Object.entries(handlers)) {
+    ipcMain.handle(channel, (event, ...args) => {
+      const url = event.senderFrame?.url || "";
+      const isApp = url.startsWith("jn-app://desktop/");
+      const isDev = !app.isPackaged && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
+      if (!isApp && !isDev) throw new Error("Origem não autorizada para o armazenamento local");
+      return handler(event, ...args);
+    });
+  }
 }
 
 function configureAutoUpdates() {
@@ -128,12 +165,17 @@ if (!hasSingleInstance) {
   });
 
   app.whenReady().then(() => {
+    registerStorageIpc();
     protocol.handle("jn-app", serveAppFile);
     createWindow();
     configureAutoUpdates();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
+  });
+
+  app.on("before-quit", () => {
+    try { localDatabase?.close(); } catch (error) { console.error("Falha ao fechar o banco local:", error); }
   });
 
   app.on("window-all-closed", () => {

@@ -30,6 +30,23 @@ export interface SyncQueueItem {
   lastError?: string;
 }
 
+interface DesktopStorageBridge {
+  readState(key: string): Promise<{ found: boolean; value?: unknown }>;
+  writeState(key: string, value: unknown): Promise<true>;
+  clearAll(): Promise<true>;
+  listQueue(): Promise<SyncQueueItem[]>;
+  upsertQueue(item: SyncQueueItem): Promise<true>;
+  deleteQueue(id: string): Promise<true>;
+  getMeta(key: string): Promise<{ found: boolean; value?: unknown }>;
+  setMeta(key: string, value: unknown): Promise<true>;
+}
+
+declare global {
+  interface Window {
+    jnStorage?: DesktopStorageBridge;
+  }
+}
+
 let dbPromise: Promise<IDBDatabase> | null = null;
 let syncInProgress = false;
 let syncRequested = false;
@@ -133,7 +150,7 @@ function isNonEmptyContainer(value: unknown): boolean {
     || (value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0);
 }
 
-export async function readStorageAsync<T>(key: string, fallback: T): Promise<T> {
+async function readLegacyStorageAsync<T>(key: string, fallback: T): Promise<T> {
   try {
     const value = await idbGet<T>(STORE, key);
     if (value !== undefined) {
@@ -159,12 +176,46 @@ export async function readStorageAsync<T>(key: string, fallback: T): Promise<T> 
   }
 }
 
+export async function readStorageAsync<T>(key: string, fallback: T): Promise<T> {
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (!desktopStorage) return readLegacyStorageAsync(key, fallback);
+
+  const durable = await desktopStorage.readState(key);
+  if (durable.found) {
+    const value = durable.value as T;
+    // Protect records left by an older build if a first SQLite row was empty.
+    const backup = fallbackRead<T | undefined>(key, undefined);
+    if (isEmptyContainer(value) && backup !== undefined && isNonEmptyContainer(backup)) {
+      await desktopStorage.writeState(key, backup);
+      fallbackWrite(key, backup);
+      try { await idbPut(STORE, backup, key); } catch { /* SQLite is the durable copy */ }
+      return backup;
+    }
+    fallbackWrite(key, value);
+    return value;
+  }
+
+  // Import from the old IndexedDB/localStorage profile once per key. The old
+  // profile is left intact as a recovery copy until SQLite has accepted it.
+  const migrated = await readLegacyStorageAsync(key, fallback);
+  await desktopStorage.writeState(key, migrated);
+  return migrated;
+}
+
 export function readStorage<T>(key: string, fallback: T): T {
   // Mantido para compatibilidade com configurações e código legado.
   return fallbackRead(key, fallback);
 }
 
 export async function writeStorageAsync<T>(key: string, value: T) {
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) {
+    // Await the SQLite commit before telling the UI a save succeeded.
+    await desktopStorage.writeState(key, value);
+    fallbackWrite(key, value);
+    try { await idbPut(STORE, value, key); } catch { /* SQLite remains authoritative */ }
+    return;
+  }
   try {
     await idbPut(STORE, value, key);
   } catch {
@@ -178,12 +229,19 @@ export async function writeStorageAsync<T>(key: string, value: T) {
 
 export function writeStorage<T>(key: string, value: T) {
   fallbackWrite(key, value);
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) {
+    void desktopStorage.writeState(key, value).catch(() => undefined);
+  }
   void idbPut(STORE, value, key).catch(() => undefined);
 }
 
 export async function clearAllStorage() {
-  try { await idbClear(STORE); } catch { /* fallback below */ }
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) await desktopStorage.clearAll();
+  try { await idbClear(STORE); } catch { /* SQLite is authoritative on desktop */ }
   try { await idbClear(QUEUE_STORE); } catch { /* ignore */ }
+  try { await idbClear(META_STORE); } catch { /* ignore */ }
   try {
     Object.keys(localStorage).filter((k) => k.startsWith(PREFIX)).forEach((k) => localStorage.removeItem(k));
   } catch { /* ignore */ }
@@ -195,6 +253,8 @@ function writeQueueBackup(queue: SyncQueueItem[]) {
 
 async function deleteQueuedItem(id: string) {
   const queue = await getSyncQueue();
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) await desktopStorage.deleteQueue(id);
   writeQueueBackup(queue.filter((item) => item.id !== id));
   try { await idbDelete(QUEUE_STORE, id); } catch { /* local backup remains authoritative */ }
 }
@@ -204,6 +264,8 @@ async function updateQueuedItem(item: SyncQueueItem) {
   const next = queue.some((queued) => queued.id === item.id)
     ? queue.map((queued) => queued.id === item.id ? item : queued)
     : [...queue, item];
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) await desktopStorage.upsertQueue(item);
   writeQueueBackup(next);
   try { await idbPut(QUEUE_STORE, item); } catch { /* local backup remains authoritative */ }
 }
@@ -222,6 +284,8 @@ async function enqueue(resource: string, operation: SyncOperation, recordId?: st
     attempts: 0,
   };
   const existing = await getSyncQueue();
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) await desktopStorage.upsertQueue(item);
   writeQueueBackup([...existing.filter((queued) => queued.id !== item.id), item]);
   try { await idbPut(QUEUE_STORE, item); } catch { /* offline storage backup remains available */ }
   void syncPending();
@@ -232,6 +296,34 @@ export async function queueStorageSync(resource: string, recordId: string, paylo
 }
 
 export async function getSyncQueue(): Promise<SyncQueueItem[]> {
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) {
+    const migrated = await desktopStorage.getMeta("sync_queue_migrated");
+    const stored = await desktopStorage.listQueue();
+    if (migrated.found && migrated.value === true) {
+      writeQueueBackup(stored);
+      return stored;
+    }
+
+    // Merge the durable queue with both older stores before marking migration
+    // complete, so an interrupted earlier sync does not drop pending records.
+    const backup = fallbackRead<SyncQueueItem[]>(QUEUE_STORE, []);
+    let indexedDbQueue: SyncQueueItem[] = [];
+    try { indexedDbQueue = await idbAll<SyncQueueItem>(QUEUE_STORE); } catch { /* local backup remains available */ }
+    const byId = new Map<string, SyncQueueItem>();
+    for (const item of [...backup, ...indexedDbQueue, ...stored]) {
+      if (item && typeof item.id === "string") byId.set(item.id, item);
+    }
+    const queue = [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    for (const item of queue) await desktopStorage.upsertQueue(item);
+    await desktopStorage.setMeta("sync_queue_migrated", true);
+    writeQueueBackup(queue);
+    for (const item of queue) {
+      try { await idbPut(QUEUE_STORE, item); } catch { /* SQLite is authoritative */ }
+    }
+    return queue;
+  }
+
   const backup = fallbackRead<SyncQueueItem[]>(QUEUE_STORE, []);
   try {
     const stored = await idbAll<SyncQueueItem>(QUEUE_STORE);
@@ -255,10 +347,20 @@ export async function getPendingSyncCount() {
 }
 
 export async function getLastSyncAt() {
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) {
+    const stored = await desktopStorage.getMeta("lastSyncAt");
+    if (stored.found) return stored.value as string;
+    const legacy = (await idbGet<string>(META_STORE, "lastSyncAt")) ?? null;
+    if (legacy) await desktopStorage.setMeta("lastSyncAt", legacy);
+    return legacy;
+  }
   return (await idbGet<string>(META_STORE, "lastSyncAt")) ?? null;
 }
 
 async function setLastSyncAt(value: string) {
+  const desktopStorage = typeof window !== "undefined" ? window.jnStorage : undefined;
+  if (desktopStorage) await desktopStorage.setMeta("lastSyncAt", value);
   await idbPut(META_STORE, value, "lastSyncAt");
 }
 
@@ -470,4 +572,3 @@ export function createRepository<T extends { id: string }>(key: string, seed: T[
     },
   };
 }
-
