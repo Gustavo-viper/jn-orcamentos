@@ -108,7 +108,7 @@ const sendVerificationEmail = async (email,code) => {
   try { result = JSON.parse(responseText); }
   catch {
     const sample = responseText.slice(0,6000).toLowerCase();
-    if (/accounts\\.google\\.com|sign in|choose an account|login required/i.test(sample)) throw new Error('EMAIL_WEBHOOK_LOGIN_REQUIRED');
+    if (sample.includes('accounts.google.com') || /sign in|choose an account|login required/i.test(sample)) throw new Error('EMAIL_WEBHOOK_LOGIN_REQUIRED');
     if (/script function not found.{0,60}dopost|function not found.{0,60}dopost/i.test(sample)) throw new Error('EMAIL_WEBHOOK_DOPOST_NOT_FOUND');
     if (response.headers.get('content-type')?.toLowerCase().includes('text/html')) throw new Error('EMAIL_WEBHOOK_HTML_RESPONSE');
     throw new Error('EMAIL_WEBHOOK_INVALID_RESPONSE');
