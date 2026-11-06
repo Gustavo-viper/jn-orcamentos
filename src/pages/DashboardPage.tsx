@@ -1,202 +1,58 @@
 import { Badge, Button, GlassCard, PageHeader, StatCard } from "@/components/ui";
 import { useAppStoreShallow } from "@/hooks/useAppStore";
-import { mockDashboard } from "@/mocks/dashboard";
 import { formatCurrency, relativeTime } from "@/utils/format";
-import {
-  Activity, ArrowDownRight, ArrowUpRight, Calculator, CheckCircle2, FileText, HardHat,
-  TrendingUp, Users, Wallet, Plus,
-} from "lucide-react";
+import { Activity, ArrowDownRight, ArrowUpRight, Calculator, CheckCircle2, Clock3, FileText, HardHat, Plus, TrendingUp, Users, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis, Legend,
-} from "recharts";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const COLORS = { gold: "#c9a24a", coffee: "#8a6240", dark: "#4f3625", light: "#d4bda1", green: "#10b981", red: "#ef4444", amber: "#f59e0b", sky: "#0ea5e9", stone: "#a8a29e" };
-
-const tooltipStyle = { borderRadius: 16, border: "1px solid rgba(255,255,255,0.6)", background: "rgba(255,255,255,0.9)", backdropFilter: "blur(12px)", color: "#2b1d14", fontSize: 12 };
-
-export default function DashboardPage() {
-  const navigate = useNavigate();
-  const { clients, quotes, workOrders, finance, activities } = useAppStoreShallow((state) => ({ clients: state.clients, quotes: state.quotes, workOrders: state.workOrders, finance: state.finance, activities: state.activities }));
-
-  const stats = useMemo(() => {
-    const approved = quotes.filter((q) => q.status === "aprovado");
-    const sales = approved.reduce((s, q) => s + q.total, 0);
-    const receivable = finance.filter((f) => f.type === "entrada" && (f.status === "pendente" || f.status === "atrasado")).reduce((s, f) => s + f.amount, 0);
-    const profit = approved.reduce((s, q) => s + q.profit, 0);
-    const inProgress = workOrders.filter((w) => w.status === "em_andamento").length;
-    const entradas = finance.filter((f) => f.type === "entrada" && f.status === "pago").reduce((s, f) => s + f.amount, 0);
-    const saidas = finance.filter((f) => f.type === "saida" && f.status === "pago").reduce((s, f) => s + f.amount, 0);
-    return { approved: approved.length, sales, receivable, profit, inProgress, entradas, saidas };
-  }, [quotes, finance, workOrders]);
-
-  const quoteChart = [
-    { name: "Pendentes", value: quotes.filter((q) => q.status === "pendente").length, color: COLORS.amber },
-    { name: "Aprovados", value: quotes.filter((q) => q.status === "aprovado").length, color: COLORS.green },
-    { name: "Recusados", value: quotes.filter((q) => q.status === "recusado").length, color: COLORS.red },
-    { name: "Expirados", value: quotes.filter((q) => q.status === "expirado").length, color: COLORS.stone },
-  ];
-  const financeChart = [
-    { name: "Entradas", value: stats.entradas, color: COLORS.green },
-    { name: "Saídas", value: stats.saidas, color: COLORS.red },
-    { name: "Saldo", value: stats.entradas - stats.saidas, color: COLORS.gold },
-  ];
-  const orderChart = [
-    { name: "Aguardando", value: workOrders.filter((w) => w.status === "aguardando").length, color: COLORS.stone },
-    { name: "Agendadas", value: workOrders.filter((w) => w.status === "agendada").length, color: COLORS.sky },
-    { name: "Em andamento", value: workOrders.filter((w) => w.status === "em_andamento").length, color: COLORS.gold },
-    { name: "Concluídas", value: workOrders.filter((w) => w.status === "concluida").length, color: COLORS.green },
-  ];
-
-  // Vendas por mês: histórico mock + mês atual com dados reais
-  const salesByMonth = useMemo(() => {
-    const data = mockDashboard.salesByMonth.map((month) => ({ ...month }));
-    const last = data[data.length - 1];
-    last.value = Math.round(stats.sales);
-    return data;
-  }, [stats.sales]);
-
-  const actIcon = { quote: FileText, order: HardHat, finance: Wallet, client: Users };
-
-  return (
-    <div>
-      <PageHeader
-        title="Dashboard"
-        subtitle="Visão geral da J & N Decorações em Gesso"
-        actions={
-          <>
-            <Button variant="secondary" icon={Plus} onClick={() => navigate("/clientes?novo=1")}>Novo cliente</Button>
-            <Button variant="gold" icon={Calculator} onClick={() => navigate("/calculadora")}>Novo orçamento</Button>
-          </>
-        }
-      />
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 animate-fade-up">
-        <StatCard icon={Users} label="Clientes" value={String(clients.length)} sub={`${clients.filter((c) => c.status === "ativo").length} ativos`} onClick={() => navigate("/clientes")} />
-        <StatCard icon={FileText} label="Orçamentos" value={String(quotes.length)} sub={`${quotes.filter((q) => q.status === "pendente").length} pendentes`} tone="gold" onClick={() => navigate("/orcamentos")} />
-        <StatCard icon={CheckCircle2} label="Aprovados" value={String(stats.approved)} sub={`${quotes.length ? Math.round((stats.approved / quotes.length) * 100) : 0}% de conversão`} tone="green" onClick={() => navigate("/orcamentos?status=aprovado")} />
-        <StatCard icon={HardHat} label="Obras em andamento" value={String(stats.inProgress)} sub={`${workOrders.length} obras no total`} tone="blue" onClick={() => navigate("/obras")} />
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-3 sm:mt-4 animate-fade-up">
-        <StatCard icon={TrendingUp} label="Vendas" value={formatCurrency(stats.sales)} sub="orçamentos aprovados" tone="gold" onClick={() => navigate("/relatorios")} />
-        <StatCard icon={ArrowDownRight} label="A receber" value={formatCurrency(stats.receivable)} sub="pendentes + atrasados" onClick={() => navigate("/financeiro")} />
-        <StatCard icon={ArrowUpRight} label="Lucro estimado" value={formatCurrency(stats.profit)} sub="margem dos aprovados" tone="green" onClick={() => navigate("/relatorios")} />
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-4 mt-4">
-        <GlassCard className="p-5 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-display text-lg font-semibold text-main">Vendas por mês</h3>
-              <p className="text-xs text-muted">Janeiro a Junho</p>
-            </div>
-            <Badge tone="gold" dot>+12% vs. semestre anterior</Badge>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={salesByMonth}>
-                <defs>
-                  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={COLORS.gold} stopOpacity={0.6} />
-                    <stop offset="100%" stopColor={COLORS.gold} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,90,60,0.12)" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#7a6554" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#7a6554" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Math.round(v / 1000)}k`} width={36} />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => [formatCurrency(Number(v)), "Vendas"]} />
-                <Area type="monotone" dataKey="value" stroke={COLORS.coffee} strokeWidth={2.5} fill="url(#gold)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-5">
-          <h3 className="font-display text-lg font-semibold text-main mb-1">Orçamentos</h3>
-          <p className="text-xs text-muted mb-2">Distribuição por status</p>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={quoteChart} dataKey="value" innerRadius={50} outerRadius={75} paddingAngle={3} stroke="none">
-                  {quoteChart.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Pie>
-                <RTooltip contentStyle={tooltipStyle} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            {quoteChart.map((q) => (
-              <div key={q.name} className="flex items-center gap-2 text-xs">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: q.color }} />
-                <span className="text-muted">{q.name}</span>
-                <span className="ml-auto font-semibold text-main">{q.value}</span>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-4 mt-4">
-        <GlassCard className="p-5">
-          <h3 className="font-display text-lg font-semibold text-main mb-1">Financeiro</h3>
-          <p className="text-xs text-muted mb-3">Realizado (pagos)</p>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={financeChart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,90,60,0.12)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#7a6554" }} axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <RTooltip contentStyle={tooltipStyle} formatter={(v) => [formatCurrency(Number(v)), ""]} />
-                <Bar dataKey="value" radius={[10, 10, 0, 0]}>
-                  {financeChart.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-5">
-          <h3 className="font-display text-lg font-semibold text-main mb-1">Obras</h3>
-          <p className="text-xs text-muted mb-3">Situação atual</p>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={orderChart} layout="vertical" margin={{ left: 0 }}>
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#7a6554" }} axisLine={false} tickLine={false} width={90} />
-                <RTooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="value" radius={[0, 10, 10, 0]} barSize={18}>
-                  {orderChart.map((e, i) => <Cell key={i} fill={e.color} />)}
-                </Bar>
-                <Legend content={() => null} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-display text-lg font-semibold text-main">Atividades recentes</h3>
-            <Activity className="h-4 w-4 text-muted" />
-          </div>
-          <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-            {activities.slice(0, 8).map((a) => {
-              const I = actIcon[a.type] ?? Activity;
-              return (
-                <div key={a.id} className="flex items-start gap-3">
-                  <div className="glass-subtle rounded-xl p-2 shrink-0"><I className="h-4 w-4 text-coffee-600 dark:text-champagne-300" /></div>
-                  <div className="min-w-0">
-                    <p className="text-sm text-main leading-snug">{a.message}</p>
-                    <p className="text-xs text-muted">{relativeTime(a.date)}</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </GlassCard>
-      </div>
-    </div>
-  );
+export default function DashboardPage(){
+ const navigate=useNavigate();
+ const {clients,quotes,workOrders,finance,activities}=useAppStoreShallow(s=>({clients:s.clients,quotes:s.quotes,workOrders:s.workOrders,finance:s.finance,activities:s.activities}));
+ const stats=useMemo(()=>{
+  const approved=quotes.filter(q=>q.status==="aprovado");
+  const received=finance.filter(f=>f.type==="entrada"&&f.status==="pago").reduce((a,f)=>a+f.amount,0);
+  const expenses=finance.filter(f=>f.type==="saida"&&f.status==="pago").reduce((a,f)=>a+f.amount,0);
+  const pending=finance.filter(f=>f.type==="entrada"&&(f.status==="pendente"||f.status==="atrasado")).reduce((a,f)=>a+f.amount,0);
+  return {approved:approved.length,sales:approved.reduce((a,q)=>a+q.total,0),profit:approved.reduce((a,q)=>a+q.profit,0),received,expenses,pending,active:workOrders.filter(w=>w.status==="em_andamento").length};
+ },[quotes,finance,workOrders]);
+ const chart=useMemo(()=>{
+  const months=Array.from({length:6},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-5+i,1);return {key:d.toLocaleDateString("pt-BR",{month:"short"}),month:d.getMonth(),year:d.getFullYear(),value:0}});
+  quotes.filter(q=>q.status==="aprovado").forEach(q=>{const d=new Date(q.createdAt);const m=months.find(x=>x.month===d.getMonth()&&x.year===d.getFullYear());if(m)m.value+=q.total});
+  return months;
+ },[quotes]);
+ const recent=[...quotes].sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime()).slice(0,5);
+ const shortcuts=[{label:"Criar orçamento",desc:"Simule materiais, medidas e valores",icon:Calculator,to:"/calculadora",primary:true},{label:"Cadastrar cliente",desc:"Organize sua carteira de clientes",icon:Users,to:"/clientes?novo=1"},{label:"Registrar movimentação",desc:"Atualize entradas e despesas",icon:Wallet,to:"/financeiro"}];
+ return <div className="space-y-6">
+  <PageHeader title="Painel de controle" subtitle="Acompanhe os indicadores e a operação da J&N em um só lugar." actions={<Button variant="gold" icon={Plus} onClick={()=>navigate("/calculadora")}>Novo orçamento</Button>}/>
+  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4" style={{background:"var(--surface)",borderColor:"var(--line)"}}>
+   <div><p className="text-xs font-bold uppercase tracking-widest text-muted">Resumo operacional</p><p className="mt-1 text-sm text-main">Você tem <b>{quotes.filter(q=>q.status==="pendente").length} orçamentos aguardando retorno</b> e <b>{stats.active} obras em execução</b>.</p></div>
+   <Badge tone="green" dot>Sistema operacional</Badge>
+  </div>
+  <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+   <StatCard icon={Users} label="Clientes cadastrados" value={String(clients.length)} sub="Base de clientes" onClick={()=>navigate("/clientes")}/>
+   <StatCard icon={FileText} label="Orçamentos" value={String(quotes.length)} sub={quotes.filter(q=>q.status==="pendente").length+" aguardando"} tone="gold" onClick={()=>navigate("/orcamentos")}/>
+   <StatCard icon={CheckCircle2} label="Aprovados" value={String(stats.approved)} sub="Negócios convertidos" tone="green" onClick={()=>navigate("/orcamentos?status=aprovado")}/>
+   <StatCard icon={HardHat} label="Obras em andamento" value={String(stats.active)} sub={workOrders.length+" ordens registradas"} tone="blue" onClick={()=>navigate("/obras")}/>
+  </div>
+  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+   <StatCard icon={TrendingUp} label="Vendas aprovadas" value={formatCurrency(stats.sales)} sub="Valor contratado" tone="gold"/>
+   <StatCard icon={ArrowDownRight} label="A receber" value={formatCurrency(stats.pending)} sub="Entradas em aberto"/>
+   <StatCard icon={Wallet} label="Recebido" value={formatCurrency(stats.received)} sub="Pagamentos confirmados" tone="green"/>
+   <StatCard icon={ArrowUpRight} label="Despesas pagas" value={formatCurrency(stats.expenses)} sub="Saídas confirmadas"/>
+  </div>
+  <div className="grid xl:grid-cols-[1.6fr_1fr] gap-4">
+   <GlassCard className="p-5">
+    <div className="mb-5 flex items-start justify-between"><div><h3 className="text-base font-bold text-main">Desempenho de vendas</h3><p className="text-xs text-muted mt-1">Orçamentos aprovados nos últimos seis meses</p></div><span className="rounded-lg px-3 py-1.5 text-xs font-semibold" style={{background:"var(--surface-2)",color:"var(--muted)"}}>6 meses</span></div>
+    <div className="h-64"><ResponsiveContainer width="100%" height="100%"><AreaChart data={chart}><defs><linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#c5a96d" stopOpacity={.28}/><stop offset="95%" stopColor="#c5a96d" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="var(--line)" vertical={false}/><XAxis dataKey="key" axisLine={false} tickLine={false} tick={{fill:"var(--muted)",fontSize:11}}/><YAxis axisLine={false} tickLine={false} tick={{fill:"var(--muted)",fontSize:10}} tickFormatter={v=>v>=1000?"R$"+(v/1000).toFixed(0)+"k":String(v)}/><Tooltip formatter={(v)=>formatCurrency(Number(v))}/><Area type="monotone" dataKey="value" name="Vendas" stroke="#b49559" strokeWidth={2.5} fill="url(#salesFill)"/></AreaChart></ResponsiveContainer></div>
+   </GlassCard>
+   <GlassCard className="p-5"><div className="mb-4"><h3 className="text-base font-bold text-main">Ações rápidas</h3><p className="text-xs text-muted mt-1">Acesse as tarefas mais usadas</p></div><div className="space-y-2">{shortcuts.map(x=><button key={x.label} onClick={()=>navigate(x.to)} className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition hover:shadow-sm" style={{borderColor:"var(--line)",background:"var(--surface-2)"}}><span className="grid h-10 w-10 place-items-center rounded-xl" style={{background:x.primary?"var(--brand)":"var(--surface)",color:x.primary?"white":"var(--brand)"}}><x.icon size={19}/></span><span className="min-w-0 flex-1"><b className="block text-sm text-main">{x.label}</b><small className="block text-xs text-muted mt-1">{x.desc}</small></span><Plus size={16} className="text-muted"/></button>)}</div></GlassCard>
+  </div>
+  <div className="grid xl:grid-cols-[1.35fr_1fr] gap-4">
+   <GlassCard className="overflow-hidden"><div className="flex items-center justify-between p-5"><div><h3 className="font-bold text-main">Orçamentos recentes</h3><p className="text-xs text-muted mt-1">Últimas movimentações comerciais</p></div><button className="text-xs font-semibold" style={{color:"var(--brand)"}} onClick={()=>navigate("/orcamentos")}>Ver todos →</button></div>
+    {recent.length?recent.map(q=><button key={q.id} onClick={()=>navigate("/orcamentos/"+q.id)} className="flex w-full items-center gap-3 border-t px-5 py-3 text-left hover:bg-black/[.02]" style={{borderColor:"var(--line)"}}><span className="grid h-9 w-9 place-items-center rounded-lg" style={{background:"var(--surface-2)",color:"var(--brand)"}}><FileText size={17}/></span><span className="min-w-0 flex-1"><b className="block text-sm text-main">#{q.number} · {q.clientName}</b><small className="text-xs text-muted">{new Date(q.createdAt).toLocaleDateString("pt-BR")}</small></span><span className="text-sm font-bold text-main">{formatCurrency(q.total)}</span></button>):<p className="p-8 text-center text-sm text-muted">Nenhum orçamento cadastrado.</p>}
+   </GlassCard>
+   <GlassCard className="p-5"><div className="mb-4"><h3 className="font-bold text-main">Atividade recente</h3><p className="text-xs text-muted mt-1">Ações registradas no sistema</p></div><div className="space-y-4">{activities.slice(0,6).map(a=><div key={a.id} className="flex gap-3"><span className="mt-1 h-2 w-2 rounded-full bg-amber-500"/><div className="min-w-0"><p className="text-sm text-main">{a.message}</p><small className="text-xs text-muted">{relativeTime(a.date)}</small></div></div>)}{!activities.length&&<p className="text-sm text-muted">As atividades aparecerão aqui.</p>}</div></GlassCard>
+  </div>
+ </div>
 }
-
