@@ -101,7 +101,7 @@ function startSharedRefresh() {
     if (document.visibilityState === "visible") void refreshSharedState();
   };
   // Pull updates frequently so the second user sees new quotes and changes quickly.
-  sharedRefreshTimer = window.setInterval(refreshWhenVisible, 5_000);
+  sharedRefreshTimer = window.setInterval(refreshWhenVisible, 30_000);
   if (!sharedRefreshEventsAttached) {
     window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener("online", refreshWhenVisible);
@@ -212,9 +212,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       await Promise.all(rotatedQuotes.map((quote) => quoteService.update(quote.id, { token: quote.token })));
       const localState = { ...shared, quotes: secureQuotes };
       document.documentElement.classList.toggle("dark", localState.settings.theme === "dark");
-      set({ ...localState, loading: false, loaded: true });
+      // Do not render empty local collections before the cloud snapshot arrives.
+      set({ ...localState, loading: true, loaded: false });
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        await refreshSharedState();
+      }
+      set({ loading: false, loaded: true });
       startSharedRefresh();
-      void refreshSharedState();
       } catch (error) {
         console.error("Falha ao carregar dados locais", error);
         document.documentElement.classList.toggle("dark", get().settings.theme === "dark");

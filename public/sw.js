@@ -1,4 +1,4 @@
-const CACHE = "jn-gesso-shell-v3";
+const CACHE = "jn-gesso-shell-v4";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

@@ -417,7 +417,7 @@ function isDemoRecord(resource: string, recordId: string): boolean {
 }
 
 export async function syncPending() {
-  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return;
+  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined" || !navigator.onLine) return;
   if (syncInProgress) {
     syncRequested = true;
     return;
@@ -490,7 +490,7 @@ export async function syncPending() {
 }
 
 export async function pullSharedState<T extends Record<string, unknown>>(local: T): Promise<T> {
-  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return local;
+  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined" || !navigator.onLine) return local;
   await syncPending();
   const response = await fetch(`${API_URL}/sync/state`, { headers: authHeaders() });
   if (!response.ok) throw new Error(`Falha ao buscar dados compartilhados (HTTP ${response.status})`);
@@ -506,6 +506,9 @@ export async function pullSharedState<T extends Record<string, unknown>>(local: 
   const result: Record<string, unknown> = { ...local };
   for (const [resource, rows] of Object.entries(cloud)) {
     if (!Array.isArray(rows)) continue;
+    // Settings are an object in the app, not a record array. Process them below.
+    // Treating local.settings as an array previously threw at .map() and aborted hydration.
+    if (resource === "settings") continue;
     const pending = pendingByResource.get(resource) ?? new Set<string>();
     const remoteItems = rows.map((row) => row.data as { id: string });
     const localItems = (local[resource] as { id: string }[] | undefined) ?? [];
@@ -570,7 +573,7 @@ export function startSyncEngine() {
     if (document.visibilityState === "visible") void syncPending();
   };
   window.addEventListener("online", sync);
-  const timer = window.setInterval(sync, 5_000);
+  const timer = window.setInterval(sync, 20_000);
   sync();
   return () => {
     window.removeEventListener("online", sync);

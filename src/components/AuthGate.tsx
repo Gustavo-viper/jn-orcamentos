@@ -8,10 +8,21 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AppUser | null>(null);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    void validateCurrentSession().then((current) => {
-      setUser(current);
-      setReady(true);
-    }).catch(() => setReady(true));
+    let cancelled = false;
+    void (async () => {
+      try {
+        const current = await validateCurrentSession();
+        // Load the authenticated Railway snapshot before rendering protected screens.
+        if (current) await useAppStore.getState().init();
+        if (!cancelled) {
+          setUser(current);
+          setReady(true);
+        }
+      } catch {
+        if (!cancelled) setReady(true);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
   if (!ready) return <div className="min-h-screen" />;
   if (!user) return <LoginPage onAuthenticated={setUser} />;
