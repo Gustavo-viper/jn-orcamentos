@@ -401,6 +401,21 @@ async function syncBatch(items: SyncQueueItem[]): Promise<{ processed: string[];
   };
 }
 
+
+const demoIds: Record<string, Set<string>> = {
+  clients: new Set(["c1","c2","c3","c4","c5","c6","c7","c8","c9","c10","c-demo-liliane"]),
+  products: new Set(["p1","p2","p3","p4","p5","p6","p7","p8","p9","p10","p11","p12","p13","p14","p15"]),
+  quotes: new Set(["q1","q2","q3","q4","q5","q6","q7","q8","q9","q10","q11","q12","q13","q14","q15","q16","q17","q18","q19","q20","q-demo-gesso-casa-detalhado"]),
+  workOrders: new Set(["os1","os2","os3","os4","os5","os6","os7","os8","os9","os10"]),
+  activities: new Set(["a1","a3","a4","a5","a6"]),
+};
+function isDemoRecord(resource: string, recordId: string): boolean {
+  const normalized = resource === "work_orders" ? "workOrders" : resource;
+  if (normalized === "services") return /^(s([1-9]|10|11)|pdf-)/.test(recordId);
+  if (normalized === "finance") return /^f-in-q\\d+-[12]$/.test(recordId) || /^f-out-[1-8]$/.test(recordId);
+  return demoIds[normalized]?.has(recordId) ?? false;
+}
+
 export async function syncPending() {
   if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return;
   if (syncInProgress) {
@@ -412,7 +427,27 @@ export async function syncPending() {
     let synced = 0;
     do {
       syncRequested = false;
-      const queue = await getSyncQueue();
+      const loadedQueue = await getSyncQueue();
+      const queue: SyncQueueItem[] = [];
+      for (const item of loadedQueue) {
+        if (item.recordId && isDemoRecord(item.resource, item.recordId)) {
+          await deleteQueuedItem(item.id);
+          continue;
+        }
+        if (item.operation === "replaceAll" && Array.isArray(item.payload)) {
+          const filtered = item.payload.filter((record) => {
+            const id = record && typeof record === "object" ? String((record as { id?: unknown }).id || "") : "";
+            return !id || !isDemoRecord(item.resource, id);
+          });
+          if (filtered.length !== item.payload.length) {
+            if (!filtered.length) { await deleteQueuedItem(item.id); continue; }
+            await updateQueuedItem({ ...item, payload: filtered });
+            queue.push({ ...item, payload: filtered });
+            continue;
+          }
+        }
+        queue.push(item);
+      }
       for (let offset = 0; offset < queue.length; offset += 50) {
         const batch = queue.slice(offset, offset + 50);
         try {
