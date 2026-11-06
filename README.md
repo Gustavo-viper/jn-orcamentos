@@ -134,6 +134,28 @@ O servidor Node entrega a API **e** o aplicativo compilado no mesmo endereço (n
 5. Garanta disco persistente para `BACKUP_DIR` e copie os backups periodicamente para outro local.
 6. Instalação nos aparelhos: abra o endereço no Chrome/Edge (Android/Windows) e use “Instalar aplicativo”; no iPhone, Safari → Compartilhar → “Adicionar à Tela de Início”.
 
+### Deploy no Railway
+
+O arquivo [`railway.json`](railway.json) já define build, inicialização e verificação de saúde (`/api/health`).
+
+1. Em [railway.com](https://railway.com), **New Project → Deploy from GitHub repo** e escolha este repositório.
+2. No mesmo projeto: **New → Database → PostgreSQL**.
+3. No serviço do app, aba **Variables**, adicione:
+   | Variável | Valor |
+   |---|---|
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+   | `NODE_ENV` | `production` |
+   | `TRUST_PROXY` | `true` |
+   | `COOKIE_SECURE` | `true` |
+   | `APP_URL` | o endereço público do passo 5 (ex.: `https://jn-orcamentos.up.railway.app`) |
+   | `BACKUP_DIR` | `/data/backups` |
+   | `SMTP_*` | opcional — e-mail de recuperação de senha |
+4. No serviço do app, **Settings → Volumes → Add volume** montado em `/data` (guarda os backups automáticos).
+5. **Settings → Networking → Generate Domain** (HTTPS automático) — ou conecte um domínio próprio.
+6. Acesse o endereço e crie o administrador na tela de **Configuração inicial**. Faça isso logo após o primeiro deploy: enquanto não houver administrador, qualquer pessoa com o link poderia criá-lo.
+
+Cada `git push` na branch principal gera um novo deploy automaticamente; as migrações do banco rodam na inicialização, com backup antes.
+
 Observações de operação:
 - Escritas são serializadas no banco (`pg_advisory_xact_lock`), então é seguro rodar mais de uma instância. As notificações em tempo real (SSE) são por instância; com várias instâncias, os aparelhos continuam sincronizando a cada 30 s.
 - Atualizações de versão do aplicativo trocam apenas os arquivos do app; **dados locais e a fila de sincronização são preservados**. O usuário vê o aviso “Nova versão disponível”.
