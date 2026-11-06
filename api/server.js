@@ -86,7 +86,7 @@ WHERE is_deleted=false AND (
   (resource='workOrders' AND record_id IN ('os1','os2','os3','os4','os5','os6','os7','os8','os9','os10')) OR
   (resource='finance' AND (record_id LIKE 'f-in-q%' OR record_id IN ('f-out-1','f-out-2','f-out-3','f-out-4','f-out-5','f-out-6','f-out-7','f-out-8'))) OR
   (resource='activities' AND record_id IN ('a1','a3','a4','a5','a6'))
-);
+)`;
 
 const syncResources = new Set(['clients','products','services','quotes','workOrders','finance','activities','settings']);
 const syncResourceName = resource => resource==='work_orders'?'workOrders':resource;
