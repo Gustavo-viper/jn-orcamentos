@@ -1,59 +1,60 @@
 import { useEffect, useState } from "react";
-import { Cloud, CloudOff, RefreshCw } from "lucide-react";
-import { getOfflineStatus, syncPending, type OfflineStatus } from "@/services/offlineService";
-import { cn } from "@/utils/cn";
+import { Wifi, WifiOff } from "lucide-react";
+import { checkApiConnection } from "@/services/storage";
 
 export function ConnectionStatus() {
-  const [status, setStatus] = useState<OfflineStatus>({ online: typeof navigator === "undefined" || navigator.onLine, pending: 0, lastSyncAt: null, apiConfigured: false, apiOnline: false });
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
 
   useEffect(() => {
     let mounted = true;
-    let refreshing = false;
+    let checking = false;
     const refresh = async () => {
-      if (refreshing || document.visibilityState !== "visible") return;
-      refreshing = true;
+      if (checking || document.visibilityState !== "visible") return;
+      checking = true;
+      const browserOnline = typeof navigator === "undefined" || navigator.onLine;
+      let connected = browserOnline;
       try {
-        const next = await getOfflineStatus();
-        if (mounted) setStatus(next);
+        // When an API is configured, confirm the server is reachable too.
+        const apiConfigured = Boolean((import.meta.env.VITE_API_URL as string | undefined)?.trim());
+        if (browserOnline && apiConfigured) connected = await checkApiConnection();
+      } catch {
+        connected = false;
       } finally {
-        refreshing = false;
+        checking = false;
       }
+      if (mounted) setOnline(connected);
     };
-    const onChange = () => { void refresh(); };
-    window.addEventListener("online", onChange);
-    window.addEventListener("offline", onChange);
-    window.addEventListener("focus", onChange);
-    document.addEventListener("visibilitychange", onChange);
-    const timer = window.setInterval(() => { void refresh(); }, 5_000);
+    const handleChange = () => {
+      const browserOnline = typeof navigator === "undefined" || navigator.onLine;
+      if (!browserOnline) setOnline(false);
+      else void refresh();
+    };
+    window.addEventListener("online", handleChange);
+    window.addEventListener("offline", handleChange);
+    window.addEventListener("focus", handleChange);
+    document.addEventListener("visibilitychange", handleChange);
+    const timer = window.setInterval(() => { void refresh(); }, 15_000);
     void refresh();
     return () => {
       mounted = false;
-      window.removeEventListener("online", onChange);
-      window.removeEventListener("offline", onChange);
-      window.removeEventListener("focus", onChange);
-      document.removeEventListener("visibilitychange", onChange);
+      window.removeEventListener("online", handleChange);
+      window.removeEventListener("offline", handleChange);
+      window.removeEventListener("focus", handleChange);
+      document.removeEventListener("visibilitychange", handleChange);
       window.clearInterval(timer);
     };
   }, []);
 
-  const label = !status.online
-    ? "Offline — alterações ficam salvas neste dispositivo"
-    : status.apiConfigured && !status.apiOnline
-      ? "Sem conexão com o banco — alterações ficam neste dispositivo"
-    : status.pending > 0
-      ? `${status.pending} alteração(ões) aguardando sincronização`
-      : status.apiConfigured ? "Online — sincronizado com o banco" : "Online — modo local";
-
   return (
-    <button
-      type="button"
-      title={label}
-      onClick={() => { void syncPending().then(getOfflineStatus).then(setStatus).catch(() => undefined); }}
-      className={cn("hidden sm:flex items-center gap-2 rounded-xl px-2.5 py-1.5 text-[11px] font-medium transition", !status.online || (status.apiConfigured && !status.apiOnline) ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : status.pending ? "bg-blue-500/10 text-blue-700 dark:text-blue-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300")}
+    <div
+      role="status"
+      aria-live="polite"
+      title={online ? "Conexão com a internet e servidor disponível" : "Sem conexão com a internet ou servidor"}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold ${online ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-red-500/10 text-red-700 dark:text-red-300"}`}
     >
-      {!status.online || (status.apiConfigured && !status.apiOnline) ? <CloudOff className="h-3.5 w-3.5" /> : status.pending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Cloud className="h-3.5 w-3.5" />}
-      <span>{label}</span>
-    </button>
+      {online ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+      <span>{online ? "Online" : "Offline"}</span>
+      <span className={`h-2 w-2 rounded-full ${online ? "bg-emerald-500" : "bg-red-500"}`} />
+    </div>
   );
 }
-
