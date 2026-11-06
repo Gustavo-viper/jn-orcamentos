@@ -191,22 +191,25 @@ export default function CalculatorPage() {
     const finalItems = previewItems;
     if (finalItems.length === 0) return toast.error("Nenhum item", "Informe medidas válidas para gerar o orçamento.");
     setSaving(true);
-    const t = calcTotals({ items: finalItems, marginPercent, discountType, discountValue });
-    const payload = {
-      clientId,
-      clientName: client.name,
-      status: "pendente" as const,
-      items: finalItems,
-      ...t,
-      marginPercent,
-      discountType,
-      discountValue,
-      downPaymentPercent: downPayment,
-      paymentTerms: settings.paymentTerms,
-      notes,
-      validUntil: addDays(validityDays),
-    };
     try {
+      // Everything after enabling the loading state belongs inside this try.
+      // Any calculation, date formatting, local persistence, or sync error must
+      // reach catch/finally so the button can never remain spinning forever.
+      const t = calcTotals({ items: finalItems, marginPercent, discountType, discountValue });
+      const payload = {
+        clientId,
+        clientName: client.name,
+        status: "pendente" as const,
+        items: finalItems,
+        ...t,
+        marginPercent,
+        discountType,
+        discountValue,
+        downPaymentPercent: downPayment,
+        paymentTerms: settings.paymentTerms,
+        notes,
+        validUntil: addDays(validityDays),
+      };
       if (editing) {
         await updateQuote(editing.id, payload);
         toast.success("Orçamento atualizado", `#${editing.number}`);
