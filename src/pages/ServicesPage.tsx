@@ -8,7 +8,21 @@ import { Layers, Pencil, Plus, Trash2, Wrench } from "lucide-react";
 import { useMemo, useState } from "react";
 
 export default function ServicesPage() {
-  const { services, products, updateService, createService, deleteService } = useAppStoreShallow((state) => ({ services: state.services, products: state.products, updateService: state.updateService, createService: state.createService, deleteService: state.deleteService }));
+  const { services: rawServices, products: rawProducts, updateService, createService, deleteService } = useAppStoreShallow((state) => ({ services: state.services, products: state.products, updateService: state.updateService, createService: state.createService, deleteService: state.deleteService }));
+  // Normalize older records that may not contain the newest service fields.
+  const services = useMemo(() => (Array.isArray(rawServices) ? rawServices : [])
+    .filter((s): s is Service => Boolean(s && typeof s === "object" && typeof s.id === "string"))
+    .map((s) => ({
+      ...s,
+      name: String(s.name ?? "Serviço sem nome"),
+      description: String(s.description ?? ""),
+      measureType: s.measureType === "linear" ? "linear" as const : "area" as const,
+      laborPrice: Number.isFinite(Number(s.laborPrice)) ? Number(s.laborPrice) : 0,
+      unitLabel: String(s.unitLabel ?? (s.measureType === "linear" ? "m" : "m²")),
+      materials: Array.isArray(s.materials) ? s.materials.filter((m) => m && typeof m === "object" && typeof m.productId === "string") : [],
+      active: s.active !== false,
+    })), [rawServices]);
+  const products = Array.isArray(rawProducts) ? rawProducts.filter((p) => p && typeof p === "object" && typeof p.id === "string") : [];
   const [selectedId, setSelectedId] = useState<string | undefined>(services[0]?.id);
   const [simW, setSimW] = useState("3");
   const [simL, setSimL] = useState("5");

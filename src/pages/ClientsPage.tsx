@@ -11,7 +11,23 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 export default function ClientsPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const { clients, quotes, createClient, updateClient, deleteClient } = useAppStoreShallow((state) => ({ clients: state.clients, quotes: state.quotes, createClient: state.createClient, updateClient: state.updateClient, deleteClient: state.deleteClient }));
+  const { clients: rawClients, quotes: rawQuotes, createClient, updateClient, deleteClient } = useAppStoreShallow((state) => ({ clients: state.clients, quotes: state.quotes, createClient: state.createClient, updateClient: state.updateClient, deleteClient: state.deleteClient }));
+  // Normalize older cloud/local records so one incomplete optional field
+  // cannot crash the entire Clientes screen.
+  const clients = useMemo(() => (Array.isArray(rawClients) ? rawClients : [])
+    .filter((c): c is Client => Boolean(c && typeof c === "object" && typeof c.id === "string"))
+    .map((c) => ({
+      ...c,
+      name: String(c.name ?? "Cliente sem nome"),
+      document: String(c.document ?? ""),
+      phone: String(c.phone ?? ""),
+      whatsapp: String(c.whatsapp ?? ""),
+      email: String(c.email ?? ""),
+      city: String(c.city ?? ""),
+      state: String(c.state ?? ""),
+      status: (["ativo", "inativo", "prospecto"].includes(c.status) ? c.status : "ativo") as Client["status"],
+    })), [rawClients]);
+  const quotes = Array.isArray(rawQuotes) ? rawQuotes.filter((q) => q && typeof q === "object") : [];
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("todos");
   const [formOpen, setFormOpen] = useState(false);
