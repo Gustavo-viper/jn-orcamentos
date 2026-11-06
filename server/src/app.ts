@@ -30,6 +30,8 @@ export function createApp() {
         },
       },
       crossOriginEmbedderPolicy: false,
+      // HSTS somente quando servido via HTTPS
+      strictTransportSecurity: config.cookieSecure,
     }),
   );
   app.use(cookieParser());
