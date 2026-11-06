@@ -138,7 +138,7 @@ O servidor Node entrega a API **e** o aplicativo compilado no mesmo endereço (n
 
 O arquivo [`railway.json`](railway.json) já define build, inicialização e verificação de saúde (`/api/health`).
 
-1. Em [railway.com](https://railway.com), **New Project → Deploy from GitHub repo** e escolha este repositório.
+1. Em [railway.com](https://railway.com), crie um **projeto novo** (separado do app atual): **New Project → Deploy from GitHub repo**, escolha este repositório e, em **Settings → Source → Branch**, selecione `v2-sistema-completo`.
 2. No mesmo projeto: **New → Database → PostgreSQL**.
 3. No serviço do app, aba **Variables**, adicione:
    | Variável | Valor |
@@ -154,7 +154,7 @@ O arquivo [`railway.json`](railway.json) já define build, inicialização e ver
 5. **Settings → Networking → Generate Domain** (HTTPS automático) — ou conecte um domínio próprio.
 6. Acesse o endereço e crie o administrador na tela de **Configuração inicial**. Faça isso logo após o primeiro deploy: enquanto não houver administrador, qualquer pessoa com o link poderia criá-lo.
 
-Cada `git push` na branch principal gera um novo deploy automaticamente; as migrações do banco rodam na inicialização, com backup antes.
+Cada `git push` na branch configurada gera um novo deploy automaticamente; as migrações do banco rodam na inicialização, com backup antes.
 
 Observações de operação:
 - Escritas são serializadas no banco (`pg_advisory_xact_lock`), então é seguro rodar mais de uma instância. As notificações em tempo real (SSE) são por instância; com várias instâncias, os aparelhos continuam sincronizando a cada 30 s.
