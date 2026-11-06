@@ -53,7 +53,10 @@ export function buildQuoteItem(p: BuildItemParams): QuoteItem {
   const wasteFactor = 1 + wastePercent / 100;
 
   let plateInfo: QuoteItem["plateInfo"];
-  const materials: QuoteMaterial[] = service.materials
+  // Serviços antigos ou registros parcialmente sincronizados podem não ter materiais.
+  // A calculadora deve continuar calculando a mão de obra sem quebrar a tela.
+  const serviceMaterials = Array.isArray(service.materials) ? service.materials : [];
+  const materials: QuoteMaterial[] = serviceMaterials
     .map((sm) => {
       const prod = products.find((pr) => pr.id === sm.productId);
       if (!prod) return null;
@@ -84,8 +87,12 @@ export function buildQuoteItem(p: BuildItemParams): QuoteItem {
     })
     .filter(Boolean) as QuoteMaterial[];
 
-  const materialsCost = +materials.reduce((s, m) => s + m.total, 0).toFixed(2);
-  const laborUnitPrice = p.laborUnitPrice ?? service.laborPrice;
+  const safeNumber = (value: unknown) => {
+    const parsed = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const materialsCost = +materials.reduce((s, m) => s + safeNumber(m.total), 0).toFixed(2);
+  const laborUnitPrice = safeNumber(p.laborUnitPrice ?? service.laborPrice);
   const laborTotal = +(measureValue * laborUnitPrice).toFixed(2);
 
   return {
@@ -123,16 +130,22 @@ export interface TotalsParams {
 }
 
 export function calcTotals(p: TotalsParams) {
-  const materialsCost = +p.items.reduce((s, i) => s + i.materialsCost, 0).toFixed(2);
-  const laborCost = +p.items.reduce((s, i) => s + i.laborTotal, 0).toFixed(2);
+  const safeNumber = (value: unknown) => {
+    const parsed = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const items = Array.isArray(p.items) ? p.items : [];
+  const materialsCost = +items.reduce((s, i) => s + safeNumber(i.materialsCost), 0).toFixed(2);
+  const laborCost = +items.reduce((s, i) => s + safeNumber(i.laborTotal), 0).toFixed(2);
   const totalCost = +(materialsCost + laborCost).toFixed(2);
-  const marginBase = +p.items.reduce((s, item) => s + (item.fixedRate ? 0 : item.materialsCost + item.laborTotal), 0).toFixed(2);
-  const profit = +(marginBase * (p.marginPercent / 100)).toFixed(2);
+  const marginBase = +items.reduce((s, item) => s + (item.fixedRate ? 0 : safeNumber(item.materialsCost) + safeNumber(item.laborTotal)), 0).toFixed(2);
+  const marginPercent = safeNumber(p.marginPercent);
+  const profit = +(marginBase * (marginPercent / 100)).toFixed(2);
   const priceBeforeDiscount = +(totalCost + profit).toFixed(2);
   const discountAmount =
     p.discountType === "percent"
-      ? +(priceBeforeDiscount * (p.discountValue / 100)).toFixed(2)
-      : Math.min(p.discountValue || 0, priceBeforeDiscount);
+      ? +(priceBeforeDiscount * (safeNumber(p.discountValue) / 100)).toFixed(2)
+      : Math.min(Math.max(0, safeNumber(p.discountValue)), priceBeforeDiscount);
   const total = +(priceBeforeDiscount - discountAmount).toFixed(2);
   return {
     materialsCost,
