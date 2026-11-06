@@ -136,7 +136,7 @@ function ServiceModal({ service, onClose, onSave }: { service?: Service; onClose
   const setMat = (i: number, patch: Partial<ServiceMaterial>) => setF((x) => ({ ...x, materials: x.materials.map((m, j) => (j === i ? { ...m, ...patch } : m)) }));
   return (
     <Modal open onClose={onClose} title={service ? `Editar — ${service.name}` : "Novo serviço"} size="xl"
-      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="gold" loading={busy} onClick={async () => { if (!f.name) return toast.error("Informe o nome"); setBusy(true); await onSave(f); setBusy(false); }}>Salvar</Button></>}>
+      footer={<><Button variant="secondary" onClick={onClose}>Cancelar</Button><Button variant="gold" loading={busy} onClick={async () => { const name = f.name.trim(); if (!name) return toast.error("Informe o nome do serviço"); setBusy(true); try { await onSave({ ...f, name }); } finally { setBusy(false); } }}>Salvar</Button></>}>
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
         <Field label="Tipo de medida"><Select value={f.measureType} onChange={(e) => { const mt = e.target.value as "area" | "linear"; setF({ ...f, measureType: mt, unitLabel: mt === "area" ? "m²" : "m" }); }}><option value="area">Área (m²)</option><option value="linear">Metro linear (m)</option></Select></Field>
