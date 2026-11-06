@@ -74,6 +74,19 @@ await sql`CREATE TABLE IF NOT EXISTS app_sync_records (
   PRIMARY KEY(resource, record_id)
 )`;
 await sql`CREATE INDEX IF NOT EXISTS app_sync_records_live_updated_idx ON app_sync_records(updated_at DESC) WHERE is_deleted=false`;
+ 
+// Hide only hard-coded demonstration records shipped in the original mock data.
+// Keep them as soft-deleted rows so the operation is reversible and preserves audit data.
+await sql`UPDATE app_sync_records SET is_deleted=true,updated_at=now()
+WHERE is_deleted=false AND (
+  (resource='clients' AND record_id IN ('c1','c2','c3','c4','c5','c6','c7','c8','c9','c10','c-demo-liliane')) OR
+  (resource='products' AND record_id IN ('p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','p13','p14','p15')) OR
+  (resource='services' AND record_id IN ('s1','s2','s3','s4','s5','s6','s7','s8','s9','s10','s11','pdf-forro-85','pdf-forro-130','pdf-forro-cimenticia-350','pdf-forro-acartonado-140','pdf-forro-acartonado-150','pdf-parede-acartonado-180','pdf-cortineiro-50','pdf-cortineiro-85','pdf-negativo-50','pdf-tabica-acartonado-45','pdf-tabica-acartonado-50','pdf-tabicas-40','pdf-divisorias-gesso-175','pdf-elevador-175','pdf-banheiros-1-pavimento-175','pdf-banheiro-2-pavimento-175','pdf-fechamento-vaos-175')) OR
+  (resource='quotes' AND record_id IN ('q1','q2','q3','q4','q5','q6','q7','q8','q9','q10','q11','q12','q13','q14','q15','q16','q17','q18','q19','q20','q-demo-gesso-casa-detalhado')) OR
+  (resource='workOrders' AND record_id IN ('os1','os2','os3','os4','os5','os6','os7','os8','os9','os10')) OR
+  (resource='finance' AND (record_id LIKE 'f-in-q%' OR record_id IN ('f-out-1','f-out-2','f-out-3','f-out-4','f-out-5','f-out-6','f-out-7','f-out-8'))) OR
+  (resource='activities' AND record_id IN ('a1','a3','a4','a5','a6'))
+);
 
 const syncResources = new Set(['clients','products','services','quotes','workOrders','finance','activities','settings']);
 const syncResourceName = resource => resource==='work_orders'?'workOrders':resource;
@@ -385,18 +398,9 @@ if (u.pathname === '/api/sync/state' && req.method === 'GET') {
   return J(state);
 }
 if (u.pathname === '/api/sync/bootstrap' && req.method === 'POST') {
-  const user=await authUser(req); if(!user)return J({error:'Sessão inválida ou expirada.'},401);
-  const b=await req.json(), records=Array.isArray(b.records)?b.records:[];
-  if(records.length>10000 || records.some(r=>!syncResources.has(syncResourceName(String(r.resource))) || !String(r.id||'') || !r.data || typeof r.data!=='object' || Array.isArray(r.data))) return J({error:'Carga inicial inválida.'},400);
-  const inserted=await sql.begin(async tx=>{
-    let count=0;
-    for(const record of records){
-      const rows=await tx`INSERT INTO app_sync_records(resource,record_id,data,updated_by) VALUES(${syncResourceName(String(record.resource))},${String(record.id)},${JSON.stringify(record.data)}::jsonb,${user.id}) ON CONFLICT(resource,record_id) DO NOTHING RETURNING record_id`;
-      count+=rows.length;
-    }
-    return count;
-  });
-  return J({ok:true,inserted});
+  // Automatic local-to-cloud bootstrap caused mock and stale local records to be
+  // reinserted. Existing data must be restored from the authoritative cloud state.
+  return J({error:'Importação automática de dados locais desativada. O servidor é a fonte principal.'},410);
 }
 
 if (u.pathname === '/api/sync/records/batch' && req.method === 'POST') {
