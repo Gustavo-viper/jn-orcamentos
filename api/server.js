@@ -429,17 +429,18 @@ if (u.pathname === '/api/sync/records/batch' && req.method === 'POST') {
         // Legacy replaceAll queues are additive in the shared database; new clients send explicit per-record removals.
         await sql.begin(async tx=>{
           for(const record of payload){
-            await tx`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${String(record.id)},${JSON.stringify(record)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
+            if ((resource==='clients'||resource==='services') && (typeof record.name!=='string'||!record.name.trim())) continue;
+            await tx`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${String(record.id)},${JSON.stringify(record)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO NOTHING`;
           }
         });
         processed.push(String(item.id));continue;
       }
-      if(!recordId||!['create','update','remove'].includes(item.operation)||(['create','update'].includes(item.operation)&&(!payload||typeof payload!=='object'||Array.isArray(payload)))){
+      if(!recordId||!['create','update','remove'].includes(item.operation)||(['create','update'].includes(item.operation)&&(!payload||typeof payload!=='object'||Array.isArray(payload)))||((resource==='clients'||resource==='services')&&item.operation==='create'&&(typeof payload?.name!=='string'||!payload.name.trim()))||((resource==='clients'||resource==='services')&&item.operation==='update'&&payload?.name!==undefined&&(typeof payload.name!=='string'||!payload.name.trim()))){
         failed.push({id:String(item.id),error:'Registro inválido na fila de sincronização'});continue;
       }
       if(item.operation==='remove')await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},'{}'::jsonb,true,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET is_deleted=true,updated_at=now(),updated_by=${user.id}`;
       else if(item.operation==='update')await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=app_sync_records.data||EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
-      else await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
+      else await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO NOTHING`;
       processed.push(String(item.id));
     }catch(error){failed.push({id:String(item.id),error:String(error?.message||'Falha ao sincronizar')});}
   }
@@ -451,9 +452,11 @@ if (u.pathname === '/api/sync/records' && req.method === 'POST') {
   const b=await req.json(), resource=syncResourceName(String(b.resource||'')), recordId=String(b.recordId||'');
   if(!syncResources.has(resource) || !recordId || recordId.length>200 || !['create','update','remove'].includes(b.operation)) return J({error:'Alteração inválida.'},400);
   const payload=b.payload && typeof b.payload==='object' && !Array.isArray(b.payload) ? b.payload : {};
+  if ((resource==='clients'||resource==='services') && b.operation==='create' && (typeof payload.name!=='string'||!payload.name.trim())) return J({error:'O nome do cliente/serviço é obrigatório. O registro não foi salvo.'},422);
+  if ((resource==='clients'||resource==='services') && b.operation==='update' && payload.name!==undefined && (typeof payload.name!=='string'||!payload.name.trim())) return J({error:'O nome não pode ficar vazio. O registro não foi alterado.'},422);
   if(b.operation==='remove') await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},'{}'::jsonb,true,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET is_deleted=true,updated_at=now(),updated_by=${user.id}`;
   else if(b.operation==='update') await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=app_sync_records.data||EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
-  else await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO UPDATE SET data=EXCLUDED.data,is_deleted=false,updated_at=now(),updated_by=${user.id}`;
+  else await sql`INSERT INTO app_sync_records(resource,record_id,data,is_deleted,updated_by) VALUES(${resource},${recordId},${JSON.stringify(payload)}::jsonb,false,${user.id}) ON CONFLICT(resource,record_id) DO NOTHING`;
   return J({ok:true});
 }
 
