@@ -393,8 +393,18 @@ if (u.pathname === '/api/auth/logout' && req.method === 'POST') {
 }
 if (u.pathname === '/api/sync/state' && req.method === 'GET') {
   const user=await authUser(req); if(!user)return J({error:'Sessão inválida ou expirada.'},401);
-  const rows=await sql`SELECT resource,record_id,data,updated_at FROM app_sync_records WHERE is_deleted=false ORDER BY updated_at`;
-  const state=Object.fromEntries([...syncResources].map(resource=>[resource,[]])); for(const row of rows){state[row.resource].push({id:row.record_id,data:row.data,updatedAt:row.updated_at})}
+  const rows=await sql`SELECT resource,record_id,data::text AS data_json,updated_at FROM app_sync_records WHERE is_deleted=false ORDER BY updated_at`;
+  const state=Object.fromEntries([...syncResources].map(resource=>[resource,[]]));
+  for(const row of rows){
+    let data={};
+    try {
+      const parsed=typeof row.data_json==='string'?JSON.parse(row.data_json):row.data_json;
+      if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed)) data=parsed;
+    } catch { console.error('Invalid JSONB record in app_sync_records:',row.resource,row.record_id); }
+    // Always return a record object with its authoritative primary key. Never
+    // turn a valid JSONB string into an empty object during cloud hydration.
+    state[row.resource].push({id:String(row.record_id),data:{...data,id:String(data.id||row.record_id)},updatedAt:row.updated_at});
+  }
   return J(state);
 }
 if (u.pathname === '/api/sync/bootstrap' && req.method === 'POST') {
