@@ -122,7 +122,7 @@ export default function CalculatorPage() {
   }, [service, products, width, length, height, wastePercent, laborOverride, roomName, negativeMeasures]);
 
   const plateProduct = useMemo(() => {
-    const pm = service?.materials.find((m) => m.mode === "per_plate");
+    const pm = (Array.isArray(service?.materials) ? service.materials : []).find((m) => m.mode === "per_plate");
     return pm ? products.find((p) => p.id === pm.productId) : undefined;
   }, [service, products]);
   const plates = plateProduct ? calcPlates(currentItem?.measureValue ?? mr.area, plateProduct.areaPerUnit || 1, wastePercent) : null;
@@ -185,6 +185,7 @@ export default function CalculatorPage() {
 
   const generate = async () => {
     if (!clientId) return toast.error("Selecione um cliente", "O orçamento precisa estar vinculado a um cliente.");
+    if (!client) return toast.error("Cliente não encontrado", "Atualize a seleção do cliente antes de gerar o orçamento.");
     if (negativeMeasures.some((m) => num(m.width) < 0 || num(m.length) < 0)) return toast.warning("Medida negativa inválida", "Use somente valores positivos nas larguras e alturas dos descontos.");
     if (service.measureType === "area" && mr.area > 0 && (currentItem?.negativeArea ?? 0) >= mr.area) return toast.warning("Desconto maior que a área", "Os descontos precisam deixar uma área positiva no cômodo.");
     const finalItems = previewItems;
@@ -193,7 +194,7 @@ export default function CalculatorPage() {
     const t = calcTotals({ items: finalItems, marginPercent, discountType, discountValue });
     const payload = {
       clientId,
-      clientName: client!.name,
+      clientName: client.name,
       status: "pendente" as const,
       items: finalItems,
       ...t,
@@ -217,8 +218,10 @@ export default function CalculatorPage() {
         clearCalculatorDraft();
         navigate(`/orcamentos/${q.id}`);
       }
-    } catch {
-      toast.error("Erro ao salvar orçamento");
+    } catch (error) {
+      console.error("Falha ao gerar orçamento:", error);
+      const detail = error instanceof Error ? error.message : "Falha inesperada ao salvar os dados.";
+      toast.error("Não foi possível gerar o orçamento", detail);
     } finally {
       setSaving(false);
     }
