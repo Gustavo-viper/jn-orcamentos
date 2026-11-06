@@ -29,7 +29,7 @@ export function ClientFormModal({ open, onClose, onSubmit, initial, loading }: {
     if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) errs.email = "E-mail inválido";
     setErrors(errs);
     if (Object.keys(errs).length) return;
-    onSubmit(form);
+    onSubmit({ ...form, name: form.name.trim() });
   };
 
   return (
