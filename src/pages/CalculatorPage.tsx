@@ -52,7 +52,12 @@ export default function CalculatorPage() {
   const [discountValue, setDiscountValue] = useState(Number(draft.discountValue ?? 0));
   const [downPayment, setDownPayment] = useState(Number(draft.downPayment ?? settings.downPaymentPercent));
   const [notes, setNotes] = useState(String(draft.notes ?? "Valores válidos conforme medidas informadas. Alterações no projeto podem gerar ajustes."));
-  const [validityDays, setValidityDays] = useState(Number(draft.validityDays ?? settings.quoteValidityDays));
+  const [validityDays, setValidityDays] = useState(() => {
+    const configuredDays = Number(settings.quoteValidityDays);
+    const draftDays = Number(draft.validityDays);
+    if (draft.validityDays !== undefined && Number.isFinite(draftDays)) return draftDays;
+    return Number.isFinite(configuredDays) ? configuredDays : 7;
+  });
   const [saving, setSaving] = useState(false);
 
   // ---- Item atual (editor) ----
@@ -208,7 +213,8 @@ export default function CalculatorPage() {
         downPaymentPercent: downPayment,
         paymentTerms: settings.paymentTerms,
         notes,
-        validUntil: addDays(validityDays),
+        // Never allow corrupted settings or an incomplete input to create an invalid date.
+        validUntil: addDays(Number.isFinite(validityDays) ? validityDays : 7),
       };
       if (editing) {
         await updateQuote(editing.id, payload);
