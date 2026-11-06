@@ -523,10 +523,37 @@ export async function pullSharedState<T extends Record<string, unknown>>(local: 
     // Treating local.settings as an array previously threw at .map() and aborted hydration.
     if (resource === "settings") continue;
     const pending = pendingByResource.get(resource) ?? new Set<string>();
-    const remoteItems = rows.map((row) => row.data as { id: string });
-    const localItems = (local[resource] as { id: string }[] | undefined) ?? [];
+    const remoteItems = rows
+      .map((row) => {
+        const data = row.data && typeof row.data === "object" ? row.data as Record<string, unknown> : {};
+        return { ...data, id: String(data.id || row.id) } as { id: string };
+      })
+      .filter((item) => Boolean(item.id));
+    const localValue = local[resource];
+    const localItems = Array.isArray(localValue)
+      ? (localValue as Array<{ id?: unknown }>).filter((item) => item && typeof item === "object" && typeof item.id === "string") as Array<{ id: string }>
+      : [];
     const localById = new Map(localItems.map((item) => [item.id, item]));
     const remoteById = new Map(remoteItems.map((item) => [item.id, item]));
+
+    // Do not let an incomplete cloud snapshot erase records that were saved
+    // locally but never reached the server (for example after an interrupted
+    // sync or an older queue format). Preserve them and enqueue an idempotent
+    // upsert so they become durable in Postgres as well.
+    const missingFromCloud = localItems.filter((item) =>
+      !remoteById.has(item.id) && !pending.has(item.id) && !isDemoRecord(resource, item.id)
+    );
+    if (missingFromCloud.length) {
+      await enqueueMany(missingFromCloud.map((item) => ({
+        resource,
+        operation: "create" as const,
+        recordId: item.id,
+        payload: item,
+      })));
+      for (const item of missingFromCloud) remoteById.set(item.id, item);
+    }
+
+    // Pending local mutations always win over the last cloud snapshot.
     for (const id of pending) {
       const localItem = localById.get(id);
       if (localItem) remoteById.set(id, localItem);
