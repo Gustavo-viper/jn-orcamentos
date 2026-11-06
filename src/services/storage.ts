@@ -506,6 +506,9 @@ export async function pullSharedState<T extends Record<string, unknown>>(local: 
   const result: Record<string, unknown> = { ...local };
   for (const [resource, rows] of Object.entries(cloud)) {
     if (!Array.isArray(rows)) continue;
+    // Settings are an object in the app, not a record array. Process them below.
+    // Treating local.settings as an array previously threw at .map() and aborted hydration.
+    if (resource === "settings") continue;
     const pending = pendingByResource.get(resource) ?? new Set<string>();
     const remoteItems = rows.map((row) => row.data as { id: string });
     const localItems = (local[resource] as { id: string }[] | undefined) ?? [];
