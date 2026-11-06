@@ -412,7 +412,7 @@ const demoIds: Record<string, Set<string>> = {
 function isDemoRecord(resource: string, recordId: string): boolean {
   const normalized = resource === "work_orders" ? "workOrders" : resource;
   if (normalized === "services") return /^(s([1-9]|10|11)|pdf-)/.test(recordId);
-  if (normalized === "finance") return /^f-in-q\\d+-[12]$/.test(recordId) || /^f-out-[1-8]$/.test(recordId);
+  if (normalized === "finance") return /^f-in-q\d+-[12]$/.test(recordId) || /^f-out-[1-8]$/.test(recordId);
   return demoIds[normalized]?.has(recordId) ?? false;
 }
 
