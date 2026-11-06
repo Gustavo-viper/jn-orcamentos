@@ -1,9 +1,6 @@
-import { useEffect } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AdminLayout } from "@/layouts/AdminLayout";
-import { useAppStoreShallow } from "@/hooks/useAppStore";
 import { Toaster } from "@/components/ui";
-import { Logo } from "@/components/Logo";
 import { PwaInstallButton } from "@/components/PwaInstallButton";
 import { AuthGate } from "@/components/AuthGate";
 import DashboardPage from "@/pages/DashboardPage";
@@ -21,27 +18,7 @@ import PortalIndexPage from "@/pages/PortalIndexPage";
 import PortalQuotePage from "@/pages/PortalQuotePage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
-function SplashScreen() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="glass rounded-3xl p-10 flex flex-col items-center gap-5 animate-fade-up">
-        <Logo size="lg" />
-        <div className="h-1.5 w-40 rounded-full bg-white/40 overflow-hidden">
-          <div className="h-full w-1/2 gold-gradient rounded-full animate-[shimmer_1.2s_infinite_linear]" />
-        </div>
-        <p className="text-xs text-muted">Carregando sistema…</p>
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
-  const { init, loaded } = useAppStoreShallow((state) => ({ init: state.init, loaded: state.loaded }));
-  useEffect(() => {
-    init();
-  }, [init]);
-
-  if (!loaded) return <SplashScreen />;
 
   return (
     <>
