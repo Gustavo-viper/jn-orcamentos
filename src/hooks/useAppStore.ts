@@ -247,7 +247,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   // ---------- Clientes ----------
   async createClient(c) {
-    const client: Client = { ...c, id: uid(), createdAt: new Date().toISOString() };
+    const name = typeof c.name === "string" ? c.name.trim() : "";
+    if (!name) throw new Error("O nome do cliente é obrigatório. Nenhum dado foi salvo.");
+    const client: Client = { ...c, name, id: uid(), createdAt: new Date().toISOString() };
     await clientService.create(client);
     set((s) => ({ clients: [client, ...s.clients] }));
     get().addActivity(`Novo cliente cadastrado: ${client.name}`, "client");
@@ -268,7 +270,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({ services: s.services.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
   },
   async createService(sv) {
-    const service: Service = { ...sv, id: uid() };
+    const name = typeof sv.name === "string" ? sv.name.trim() : "";
+    if (!name) throw new Error("O nome do serviço é obrigatório. Nenhum dado foi salvo.");
+    const service: Service = { ...sv, name, id: uid() };
     await serviceService.create(service);
     set((s) => ({ services: [...s.services, service] }));
     return service;
