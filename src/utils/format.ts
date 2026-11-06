@@ -35,8 +35,11 @@ export const relativeTime = (iso: string) => {
 };
 
 export const addDays = (days: number, from = new Date()) => {
-  const d = new Date(from);
-  d.setDate(d.getDate() + days);
+  const parsedDays = Number(days);
+  const validDays = Number.isFinite(parsedDays) ? parsedDays : 0;
+  const parsedFrom = new Date(from);
+  const d = Number.isNaN(parsedFrom.getTime()) ? new Date() : parsedFrom;
+  d.setDate(d.getDate() + validDays);
   return d.toISOString();
 };
 
