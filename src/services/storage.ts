@@ -417,7 +417,7 @@ function isDemoRecord(resource: string, recordId: string): boolean {
 }
 
 export async function syncPending() {
-  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return;
+  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined" || !navigator.onLine) return;
   if (syncInProgress) {
     syncRequested = true;
     return;
@@ -490,7 +490,7 @@ export async function syncPending() {
 }
 
 export async function pullSharedState<T extends Record<string, unknown>>(local: T): Promise<T> {
-  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined") return local;
+  if (!API_URL || !localStorage.getItem(TOKEN_KEY) || typeof navigator === "undefined" || !navigator.onLine) return local;
   await syncPending();
   const response = await fetch(`${API_URL}/sync/state`, { headers: authHeaders() });
   if (!response.ok) throw new Error(`Falha ao buscar dados compartilhados (HTTP ${response.status})`);
@@ -570,7 +570,7 @@ export function startSyncEngine() {
     if (document.visibilityState === "visible") void syncPending();
   };
   window.addEventListener("online", sync);
-  const timer = window.setInterval(sync, 5_000);
+  const timer = window.setInterval(sync, 20_000);
   sync();
   return () => {
     window.removeEventListener("online", sync);
