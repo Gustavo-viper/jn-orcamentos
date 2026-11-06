@@ -525,7 +525,9 @@ export async function pullSharedState<T extends Record<string, unknown>>(local: 
     const pending = pendingByResource.get(resource) ?? new Set<string>();
     const remoteItems = rows
       .map((row) => {
-        const data = row.data && typeof row.data === "object" ? row.data as Record<string, unknown> : {};
+        const data = row.data && typeof row.data === "object" && !Array.isArray(row.data)
+          ? row.data as Record<string, unknown>
+          : {};
         return { ...data, id: String(data.id || row.id) } as { id: string };
       })
       .filter((item) => Boolean(item.id));
@@ -535,6 +537,33 @@ export async function pullSharedState<T extends Record<string, unknown>>(local: 
       : [];
     const localById = new Map(localItems.map((item) => [item.id, item]));
     const remoteById = new Map(remoteItems.map((item) => [item.id, item]));
+
+    // A partial/older cloud row must never blank a locally complete client or
+    // service. Merge field-by-field, retaining meaningful local values when
+    // the cloud value is missing, null, or an empty string. Queue the merged
+    // full record as an update so Postgres is repaired instead of losing data
+    // again on the next refresh.
+    if (resource === "clients" || resource === "services") {
+      for (const remote of remoteItems) {
+        const localItem = localById.get(remote.id);
+        if (!localItem) continue;
+        const merged = { ...remote } as Record<string, unknown>;
+        let recovered = false;
+        for (const [key, value] of Object.entries(localItem)) {
+          const remoteValue = merged[key];
+          const remoteIsBlank = remoteValue === undefined || remoteValue === null || remoteValue === "";
+          const localIsMeaningful = value !== undefined && value !== null && value !== "";
+          if (remoteIsBlank && localIsMeaningful) {
+            merged[key] = value;
+            recovered = true;
+          }
+        }
+        if (recovered && !pending.has(remote.id)) {
+          remoteById.set(remote.id, merged as { id: string });
+          await enqueue(resource, "update", remote.id, merged);
+        }
+      }
+    }
 
     // Do not let an incomplete cloud snapshot erase records that were saved
     // locally but never reached the server (for example after an interrupted
