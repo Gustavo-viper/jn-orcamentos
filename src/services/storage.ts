@@ -331,21 +331,18 @@ export async function getSyncQueue(): Promise<SyncQueueItem[]> {
     return queue;
   }
 
-  const backup = fallbackRead<SyncQueueItem[]>(QUEUE_STORE, []);
+  // IndexedDB is the source of truth in the web app. Merging it with the
+  // localStorage mirror resurrected already-deleted queue entries and kept
+  // the pending counter stuck after a successful sync.
   try {
     const stored = await idbAll<SyncQueueItem>(QUEUE_STORE);
-    const byId = new Map<string, SyncQueueItem>();
-    for (const item of [...backup, ...stored]) byId.set(item.id, item);
-    const queue = [...byId.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const queue = stored.filter((item) => item && typeof item.id === "string")
+      .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
     writeQueueBackup(queue);
-    for (const item of queue) {
-      if (!stored.some((saved) => saved.id === item.id)) {
-        try { await idbPut(QUEUE_STORE, item); } catch { /* queue remains in local backup */ }
-      }
-    }
     return queue;
   } catch {
-    return backup.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return fallbackRead<SyncQueueItem[]>(QUEUE_STORE, [])
+      .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
   }
 }
 
@@ -434,17 +431,33 @@ export async function syncPending() {
           await deleteQueuedItem(item.id);
           continue;
         }
-        if (item.operation === "replaceAll" && Array.isArray(item.payload)) {
-          const filtered = item.payload.filter((record) => {
-            const id = record && typeof record === "object" ? String((record as { id?: unknown }).id || "") : "";
-            return !id || !isDemoRecord(item.resource, id);
-          });
-          if (filtered.length !== item.payload.length) {
-            if (!filtered.length) { await deleteQueuedItem(item.id); continue; }
-            await updateQueuedItem({ ...item, payload: filtered });
-            queue.push({ ...item, payload: filtered });
-            continue;
+        if (item.operation === "replaceAll") {
+          // The current API accepts only create/update/remove. Migrate old
+          // replaceAll snapshots into idempotent upserts instead of retrying
+          // an unsupported operation forever. Never delete remote records here.
+          const records = Array.isArray(item.payload) ? item.payload : [];
+          const recoverable = records.filter((record) => {
+            if (!record || typeof record !== "object" || Array.isArray(record)) return false;
+            const id = String((record as { id?: unknown }).id || "");
+            return Boolean(id) && !isDemoRecord(item.resource, id);
+          }) as Array<{ id: string }>;
+          if (recoverable.length) {
+            await enqueueMany(recoverable.map((record) => ({
+              resource: item.resource,
+              operation: "create" as const,
+              recordId: record.id,
+              payload: record,
+            })));
           }
+          await deleteQueuedItem(item.id);
+          continue;
+        }
+        if (!["create", "update", "remove"].includes(item.operation)
+          || !item.resource || !item.recordId) {
+          // These legacy entries cannot be accepted by the API and contain
+          // no actionable record identity. Remove only the invalid queue row.
+          await deleteQueuedItem(item.id);
+          continue;
         }
         queue.push(item);
       }
