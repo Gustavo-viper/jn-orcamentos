@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+**/dist
+server/data
+server/backups
+.git
+.env
+**/.env
+*.log
+tela-notebook.png

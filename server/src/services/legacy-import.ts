@@ -9,6 +9,7 @@
  *  - orçamentos importados preservam exatamente os valores originais (documentos comerciais).
  */
 import { createHash } from 'node:crypto';
+import pg from 'pg';
 import { sql } from 'drizzle-orm';
 import {
   DEFAULT_COMPANY,
@@ -387,4 +388,24 @@ export async function importLegacy(records: LegacyRecord[], opts: { dryRun: bool
   if (opts.legacyUsers?.length)
     report.warnings.push(`Usuários do sistema anterior NÃO são migrados (senhas usam outro formato): ${opts.legacyUsers.map((u) => `${u.username}${u.email ? ` <${u.email}>` : ''}`).join(', ')}. Cadastre-os em Configurações → Usuários.`);
   return report;
+}
+
+/** Lê o banco antigo em transação SOMENTE LEITURA e importa (ou simula). */
+export async function runLegacyImport(url: string, write: boolean) {
+  const src = new pg.Client({ connectionString: url });
+  await src.connect();
+  // garante somente leitura na origem
+  await src.query('BEGIN READ ONLY');
+  const { rows } = await src.query<LegacyRecord>('select resource, record_id, data, is_deleted, updated_at from app_sync_records order by updated_at');
+  const users = await src
+    .query<{ username: string; email: string | null }>('select username, email from app_users order by id')
+    .then((r) => r.rows)
+    .catch(() => []);
+  const legacyTables = await src.query<{ table_name: string }>("select table_name from information_schema.tables where table_schema='public' and table_name in ('quotes','clients','products','work_orders','finance_entries','stock_movements')");
+  const legacyCounts: Record<string, number> = {};
+  for (const t of legacyTables.rows) legacyCounts[t.table_name] = Number((await src.query(`select count(*)::int as n from "${t.table_name}"`)).rows[0].n);
+  await src.query('ROLLBACK');
+  await src.end();
+  
+    return { ...(await importLegacy(rows, { dryRun: !write, legacyUsers: users })), tabelasAntigasRelacionais: legacyCounts };
 }
