@@ -24,6 +24,7 @@ export async function initDb(): Promise<DB> {
   if (config.databaseUrl) {
     const { drizzle } = await import('drizzle-orm/node-postgres');
     const pg = await import('pg');
+    if (process.env.DB_CREATE_IF_MISSING === 'true') await createDatabaseIfMissing(pg.default, config.databaseUrl);
     const pool = new pg.default.Pool({ connectionString: config.databaseUrl, max: 10 });
     pool.on('error', (e) => console.error('[db] erro no pool', e));
     _db = drizzle(pool, { schema, casing: 'snake_case' });
@@ -40,6 +41,28 @@ export async function initDb(): Promise<DB> {
     dbKind = 'pglite';
   }
   return _db;
+}
+
+/**
+ * Cria o banco indicado em DATABASE_URL se ainda não existir (no mesmo servidor
+ * PostgreSQL). Nunca apaga nem altera outros bancos.
+ */
+async function createDatabaseIfMissing(pgMod: typeof import('pg').default, url: string) {
+  const u = new URL(url);
+  const name = decodeURIComponent(u.pathname.replace(/^\//, ''));
+  if (!/^[A-Za-z0-9_]{1,63}$/.test(name)) throw new Error('Nome de banco inválido em DATABASE_URL.');
+  u.pathname = '/postgres';
+  const c = new pgMod.Client({ connectionString: u.toString() });
+  await c.connect();
+  try {
+    const r = await c.query('select 1 from pg_database where datname = $1', [name]);
+    if (!r.rowCount) {
+      await c.query(`create database "${name}"`);
+      console.log(`[db] banco "${name}" criado.`);
+    }
+  } finally {
+    await c.end();
+  }
 }
 
 export function db(): DB {

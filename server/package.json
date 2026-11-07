@@ -12,7 +12,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "backup": "tsx src/scripts/backup.ts",
-    "create-admin": "tsx src/scripts/create-admin.ts"
+    "create-admin": "tsx src/scripts/create-admin.ts",
+    "import-legacy": "node dist/scripts/import-legacy.js",
+    "import-legacy:dev": "tsx src/scripts/import-legacy.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.15",
