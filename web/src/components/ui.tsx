@@ -20,10 +20,10 @@ export { clsx };
 // ---------------- Botões ----------------
 type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'gold' | 'outline';
 const BTN: Record<BtnVariant, string> = {
-  primary: 'bg-navy-800 text-white hover:bg-navy-700 active:bg-navy-900 shadow-sm dark:bg-gold-400 dark:text-navy-950 dark:hover:bg-gold-300',
-  gold: 'bg-gradient-to-b from-gold-300 to-gold-500 text-navy-950 hover:brightness-105 shadow-sm',
-  secondary: 'bg-graphite-100 text-graphite-800 hover:bg-graphite-200 dark:bg-white/[0.06] dark:text-graphite-100 dark:hover:bg-white/10',
-  outline: 'border border-graphite-200 bg-white text-graphite-800 hover:bg-graphite-50 dark:border-white/10 dark:bg-transparent dark:text-graphite-100 dark:hover:bg-white/5',
+  primary: 'bg-gradient-to-b from-navy-700 to-navy-900 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_6px_16px_-8px_rgba(15,28,53,0.7)] hover:brightness-110 dark:from-gold-300 dark:to-gold-500 dark:text-navy-950',
+  gold: 'bg-gradient-to-b from-gold-300 to-gold-500 text-navy-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_6px_16px_-8px_rgba(184,146,79,0.8)] hover:brightness-105',
+  secondary: 'bg-white/55 text-graphite-800 ring-1 ring-white/70 backdrop-blur-md hover:bg-white/75 dark:bg-white/[0.07] dark:text-graphite-100 dark:ring-white/10 dark:hover:bg-white/[0.12]',
+  outline: 'border border-white/80 bg-white/60 text-graphite-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_-4px_rgba(15,28,53,0.18)] backdrop-blur-md hover:bg-white/80 dark:border-white/10 dark:bg-white/[0.05] dark:text-graphite-100 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-white/[0.1]',
   ghost: 'text-graphite-600 hover:bg-graphite-100 dark:text-graphite-300 dark:hover:bg-white/5',
   danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm',
 };
@@ -297,10 +297,10 @@ export function Modal({ open, onClose, title, children, footer, size = 'md', clo
   if (!open) return null;
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 animate-fade-in bg-navy-950/50 backdrop-blur-[2px]" onClick={closeOnBackdrop ? onClose : undefined} />
+      <div className="absolute inset-0 animate-fade-in bg-navy-950/35 backdrop-blur-sm" onClick={closeOnBackdrop ? onClose : undefined} />
       <div
         className={clsx(
-          'relative flex max-h-[92dvh] w-full animate-slide-up flex-col rounded-t-3xl bg-white shadow-2xl sm:animate-scale-in sm:rounded-2xl dark:bg-graphite-900 dark:ring-1 dark:ring-white/10',
+          'glass-strong glass-rim relative flex max-h-[92dvh] w-full animate-slide-up flex-col rounded-t-[30px] sm:animate-scale-in sm:rounded-[26px]',
           size === 'sm' && 'sm:max-w-md',
           size === 'md' && 'sm:max-w-xl',
           size === 'lg' && 'sm:max-w-3xl',
@@ -423,9 +423,9 @@ export function ToastHost() {
   );
   const icon = { success: <CheckCircle2 className="h-5 w-5 text-emerald-500" />, error: <XCircle className="h-5 w-5 text-red-500" />, info: <Info className="h-5 w-5 text-navy-400" />, warning: <AlertTriangle className="h-5 w-5 text-amber-500" /> };
   return createPortal(
-    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-[60] flex flex-col items-center gap-2 px-4 lg:right-6 lg:bottom-6 lg:left-auto lg:items-end" aria-live="polite">
+    <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[60] flex flex-col items-center gap-2 px-4 lg:right-6 lg:bottom-6 lg:left-auto lg:items-end" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className="pointer-events-auto flex w-full max-w-sm animate-slide-up items-start gap-3 rounded-2xl border border-graphite-200 bg-white px-4 py-3 text-sm shadow-xl dark:border-white/10 dark:bg-graphite-800">
+        <div key={t.id} className="glass-strong pointer-events-auto flex w-full max-w-sm animate-slide-up items-start gap-3 rounded-2xl px-4 py-3 text-sm">
           {icon[t.kind]}
           <div className="flex-1 pt-0.5">{t.message}</div>
         </div>

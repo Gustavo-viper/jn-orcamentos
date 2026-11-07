@@ -30,3 +30,13 @@ export function useDensity() {
   }, [compact]);
   return [compact, setCompact] as const;
 }
+
+/** Efeito vidro (translucidez + desfoque). Pode ser desligado em aparelhos mais lentos. */
+export function useGlass() {
+  const [glass, setGlass] = useState(() => localStorage.getItem('jn_glass') !== '0');
+  useEffect(() => {
+    localStorage.setItem('jn_glass', glass ? '1' : '0');
+    document.documentElement.classList.toggle('no-glass', !glass);
+  }, [glass]);
+  return [glass, setGlass] as const;
+}

@@ -198,7 +198,7 @@ function Notice({ children, tone, icon }: { children: React.ReactNode; tone: 'gr
 
 function Shell({ children, company }: { children: React.ReactNode; company?: CompanySettings }) {
   return (
-    <div className="min-h-dvh bg-graphite-50 text-graphite-900">
+    <div className="min-h-dvh text-graphite-900">
       <header className="bg-gradient-to-r from-navy-900 to-navy-950">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-5 py-4">
           <img src={company?.logo || '/logo-jn.webp'} alt="" className="h-14 w-auto object-contain" />

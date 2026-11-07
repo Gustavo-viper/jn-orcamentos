@@ -127,7 +127,7 @@ export function Layout() {
   const linkCls = (to: string) => ({ isActive }: { isActive: boolean }) =>
     clsx(
       'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[14px] font-medium transition-all',
-      isActive && !(to === '/orcamentos' && location.pathname.startsWith('/orcamentos/novo')) ? 'bg-white/10 text-white shadow-[inset_2px_0_0_var(--color-gold-400)]' : 'text-navy-100/70 hover:bg-white/5 hover:text-white',
+      isActive && !(to === '/orcamentos' && location.pathname.startsWith('/orcamentos/novo')) ? 'bg-white/[0.14] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_4px_14px_-6px_rgba(0,0,0,0.5)] ring-1 ring-white/10' : 'text-navy-100/75 hover:bg-white/[0.07] hover:text-white',
     );
 
   const mobileMain: NavItem[] = [NAV[0], NAV[1], NAV[3]].filter((n) => !n.module || can(n.module));
@@ -135,7 +135,7 @@ export function Layout() {
   return (
     <div className="min-h-dvh lg:pl-64">
       {/* Menu lateral (desktop) */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-gradient-to-b from-navy-900 to-navy-950 lg:flex">
+      <aside className="glass-navy glass-rim fixed inset-y-3 left-3 z-30 hidden w-[14.75rem] flex-col overflow-hidden rounded-[28px] lg:flex">
         <div className="px-5 pt-5 pb-3">
           <Logo className="h-auto w-full drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
           <div className="mt-2 text-center text-[11px] font-medium tracking-[0.2em] text-gold-300/80 uppercase">Orçamentos</div>
@@ -163,7 +163,7 @@ export function Layout() {
       </aside>
 
       {/* Barra superior */}
-      <header className="sticky top-0 z-20 border-b border-graphite-200/60 bg-graphite-50/85 backdrop-blur-md dark:border-white/5 dark:bg-graphite-950/80">
+      <header className="glass-strong sticky top-0 z-20 rounded-none border-x-0 border-t-0 lg:top-3 lg:mx-8 lg:mt-3 lg:rounded-2xl lg:border">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 lg:h-16 lg:px-8" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <div className="flex items-center gap-2 lg:hidden">
             <span className="rounded-xl bg-gradient-to-b from-navy-900 to-navy-950 px-2 py-0.5 shadow-sm">
@@ -176,13 +176,13 @@ export function Layout() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pt-4 pb-28 sm:pt-6 lg:px-8 lg:pb-12">
+      <main className="mx-auto max-w-7xl px-4 pt-4 pb-32 sm:pt-6 lg:px-8 lg:pb-12">
         <Outlet />
       </main>
 
       {/* Navegação inferior (celular / tablet) */}
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-graphite-200/70 bg-white/95 backdrop-blur-md lg:hidden dark:border-white/5 dark:bg-graphite-900/95" aria-label="Navegação">
-        <div className="mx-auto grid h-16 max-w-lg grid-cols-5 items-center">
+      <nav className="glass-strong glass-rim fixed inset-x-3 z-30 mx-auto max-w-lg rounded-[30px] lg:hidden" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 10px)' }} aria-label="Navegação">
+        <div className="grid h-16 grid-cols-5 items-center px-1">
           {mobileMain.slice(0, 2).map((n) => (
             <BottomLink key={n.to} item={n} />
           ))}
@@ -190,7 +190,7 @@ export function Layout() {
             <div className="flex justify-center">
               <button
                 onClick={() => navigate('/orcamentos/novo')}
-                className="-mt-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-b from-gold-300 to-gold-500 text-navy-950 shadow-lg shadow-gold-500/30 transition active:scale-95"
+                className="glass-rim -mt-7 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-b from-gold-300 to-gold-500 text-navy-950 shadow-[0_10px_24px_-8px_rgba(184,146,79,0.75),inset_0_1px_0_rgba(255,255,255,0.7)] ring-4 ring-white/40 transition active:scale-95 dark:ring-black/30"
                 aria-label="Novo orçamento"
               >
                 <Plus className="h-7 w-7" />
@@ -211,7 +211,7 @@ export function Layout() {
       {moreOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 animate-fade-in bg-navy-950/50" onClick={() => setMoreOpen(false)} />
-          <div className="safe-bottom absolute inset-x-0 bottom-0 animate-slide-up rounded-t-3xl bg-white p-4 dark:bg-graphite-900">
+          <div className="glass-strong glass-rim absolute inset-x-3 animate-slide-up rounded-[30px] p-4" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 10px)' }}>
             <div className="mb-3 flex items-center justify-between px-1">
               <div>
                 <div className="text-sm font-semibold">{user?.name}</div>
@@ -228,7 +228,7 @@ export function Layout() {
                   to={n.to}
                   end={n.end}
                   className={({ isActive }) =>
-                    clsx('flex flex-col items-center gap-2 rounded-2xl px-2 py-3 text-center text-xs font-medium transition', isActive ? 'bg-navy-800 text-white dark:bg-gold-400 dark:text-navy-950' : 'bg-graphite-50 text-graphite-700 dark:bg-white/5 dark:text-graphite-200')
+                    clsx('flex flex-col items-center gap-2 rounded-2xl px-2 py-3 text-center text-xs font-medium transition', isActive ? 'bg-navy-800 text-white dark:bg-gold-400 dark:text-navy-950' : 'bg-white/55 text-graphite-700 ring-1 ring-white/70 dark:bg-white/[0.06] dark:text-graphite-200 dark:ring-white/10')
                   }
                 >
                   {n.icon}

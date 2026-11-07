@@ -28,9 +28,11 @@ export function AuthShell({ children, title, subtitle }: { children?: ReactNode;
               <Logo className="h-auto w-56" />
             </span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-graphite-500">{subtitle}</p>}
-          <div className="mt-6">{children}</div>
+          <div className="card p-6 sm:p-8">
+            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+            {subtitle && <p className="mt-1 text-sm text-graphite-500">{subtitle}</p>}
+            <div className="mt-6">{children}</div>
+          </div>
         </div>
       </div>
     </div>

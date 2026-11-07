@@ -7,7 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { api, errorMessage } from '../../lib/api';
 import { BR_STATES, lookupCep } from '../../lib/format';
 import { fieldErrors } from '../../lib/forms';
-import { useDensity, useTheme, type ThemePref } from '../../lib/theme';
+import { useDensity, useGlass, useTheme, type ThemePref } from '../../lib/theme';
 import { Button, Card, CardHeader, Checkbox, clsx, Field, Input, NumberInput, PageHeader, Select, Tabs, Textarea, Toggle, toast } from '../../components/ui';
 import { UsersPanel } from './UsersPanel';
 import { SystemPanel } from './SystemPanel';
@@ -89,6 +89,7 @@ function ProfilePanel() {
 function AppearancePanel() {
   const [pref, setPref] = useTheme();
   const [compact, setCompact] = useDensity();
+  const [glass, setGlass] = useGlass();
   const opts: { v: ThemePref; label: string; desc: string }[] = [
     { v: 'light', label: 'Modo claro', desc: 'Fundo claro, ideal para ambientes iluminados' },
     { v: 'dark', label: 'Modo escuro', desc: 'Reduz o brilho, ideal à noite' },
@@ -107,7 +108,10 @@ function AppearancePanel() {
             </button>
           ))}
         </div>
-        <Toggle checked={compact} onChange={setCompact} label="Modo compacto (textos e espaçamentos menores)" />
+        <div className="space-y-3">
+          <Toggle checked={glass} onChange={setGlass} label="Efeito vidro (estilo iPhone) — desligue se o aparelho ficar lento" />
+          <Toggle checked={compact} onChange={setCompact} label="Modo compacto (textos e espaçamentos menores)" />
+        </div>
       </div>
     </Card>
   );

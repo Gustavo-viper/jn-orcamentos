@@ -17,7 +17,7 @@ export function UpdatePrompt() {
   });
   if (!needRefresh) return null;
   return (
-    <div className="fixed inset-x-0 bottom-20 z-[70] flex justify-center px-4 lg:bottom-6">
+    <div className="fixed inset-x-0 bottom-28 z-[70] flex justify-center px-4 lg:bottom-6">
       <div className="flex w-full max-w-md animate-slide-up items-center gap-3 rounded-2xl bg-navy-900 px-4 py-3 text-sm text-white shadow-2xl">
         <RefreshCw className="h-5 w-5 text-gold-300" />
         <span className="flex-1">Nova versão disponível. Seus dados estão preservados.</span>

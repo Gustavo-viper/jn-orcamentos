@@ -172,7 +172,7 @@ export default function QuoteEditor() {
   };
 
   return (
-    <div className="animate-fade-in pb-24 xl:pb-0">
+    <div className="animate-fade-in pb-28 xl:pb-0">
       <PageHeader
         back={
           <Link to={isEdit ? `/orcamentos/${quoteId}` : '/orcamentos'} className="mb-2 inline-flex items-center gap-1 text-sm text-graphite-500 hover:text-graphite-800">
@@ -363,14 +363,14 @@ export default function QuoteEditor() {
       </div>
 
       {/* Resumo (celular: barra inferior expansível) */}
-      <div className="fixed inset-x-0 bottom-16 z-20 lg:+bottom-0 lg:left-64 xl:hidden">
+      <div className="fixed inset-x-3 z-20 mx-auto max-w-lg space-y-2 lg:left-[16.75rem] lg:max-w-none xl:hidden" style={{ bottom: 'calc(env(safe-area-inset-bottom) + 84px)' }}>
         {showSummary && (
-          <div className="max-h-[60dvh] overflow-y-auto rounded-t-3xl border-t border-graphite-200 bg-white p-4 shadow-2xl dark:border-white/10 dark:bg-graphite-900">
+          <div className="glass-strong glass-rim max-h-[55dvh] overflow-y-auto rounded-[26px] p-4">
             <QuoteSummary calc={calc} />
             <Errors errors={calc.errors} />
           </div>
         )}
-        <div className="flex items-center gap-2 border-t border-graphite-200 bg-white/95 px-3 py-2 backdrop-blur dark:border-white/10 dark:bg-graphite-900/95">
+        <div className="glass-strong glass-rim flex items-center gap-2 rounded-[22px] px-3 py-2">
           <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setShowSummary((v) => !v)}>
             {showSummary ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
             <div className="min-w-0">
@@ -428,7 +428,7 @@ function ClientPicker({ clients, value, onChange }: { clients: Client[]; value: 
         onChange={(e) => setQ(e.target.value)}
       />
       {open && (
-        <ul className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-graphite-200 bg-white py-1 shadow-xl dark:border-white/10 dark:bg-graphite-800">
+        <ul className="glass-strong absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl py-1">
           {list.length ? (
             list.map((c) => (
               <li key={c.id}>

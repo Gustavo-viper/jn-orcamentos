@@ -63,7 +63,34 @@
     text-rendering: optimizeLegibility;
   }
   body {
-    @apply bg-graphite-50 text-graphite-900 antialiased dark:bg-graphite-950 dark:text-graphite-100;
+    @apply text-graphite-900 antialiased dark:text-graphite-100;
+    background-color: #e8ecf4;
+    min-height: 100dvh;
+  }
+  .dark body {
+    background-color: #06080e;
+  }
+  /* fundo com manchas de cor: dá ao vidro algo para desfocar e refratar */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: -10%;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(38% 42% at 8% 4%, rgba(43, 66, 110, 0.5), transparent 70%),
+      radial-gradient(34% 38% at 96% 6%, rgba(207, 167, 90, 0.45), transparent 70%),
+      radial-gradient(40% 40% at 88% 96%, rgba(220, 38, 38, 0.2), transparent 70%),
+      radial-gradient(42% 46% at 4% 98%, rgba(84, 112, 164, 0.34), transparent 70%),
+      radial-gradient(30% 30% at 50% 50%, rgba(255, 255, 255, 0.55), transparent 70%);
+    filter: saturate(115%);
+  }
+  .dark body::before {
+    background:
+      radial-gradient(38% 42% at 8% 4%, rgba(43, 66, 110, 0.55), transparent 70%),
+      radial-gradient(34% 38% at 96% 6%, rgba(207, 167, 90, 0.16), transparent 70%),
+      radial-gradient(40% 40% at 88% 96%, rgba(185, 28, 28, 0.18), transparent 70%),
+      radial-gradient(42% 46% at 4% 98%, rgba(58, 85, 137, 0.36), transparent 70%);
   }
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-gold-400;
@@ -80,10 +107,10 @@
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-graphite-200/70 bg-white shadow-[0_1px_2px_rgba(15,28,53,0.04),0_4px_16px_-8px_rgba(15,28,53,0.08)] dark:border-white/[0.07] dark:bg-graphite-900 dark:shadow-none;
+    @apply glass rounded-2xl;
   }
   .input {
-    @apply block w-full rounded-xl border border-graphite-200 bg-white px-3 py-2.5 text-[15px] text-graphite-900 placeholder:text-graphite-400 transition focus:border-navy-400 focus:outline-none focus:ring-4 focus:ring-navy-100 disabled:cursor-not-allowed disabled:bg-graphite-100 disabled:text-graphite-500 dark:border-white/10 dark:bg-graphite-950 dark:text-graphite-100 dark:focus:border-gold-400/60 dark:focus:ring-gold-400/10 dark:disabled:bg-graphite-900 sm:text-sm;
+    @apply block w-full rounded-xl border border-white/70 bg-white/70 shadow-[inset_0_1px_2px_rgba(15,28,53,0.06)] backdrop-blur-md px-3 py-2.5 text-[15px] text-graphite-900 placeholder:text-graphite-400 transition focus:border-navy-400 focus:outline-none focus:ring-4 focus:ring-navy-100 disabled:cursor-not-allowed disabled:bg-graphite-100 disabled:text-graphite-500 dark:border-white/10 dark:bg-black/30 dark:text-graphite-100 dark:focus:border-gold-400/60 dark:focus:ring-gold-400/10 dark:disabled:bg-graphite-900 sm:text-sm;
   }
   .label {
     @apply mb-1.5 block text-[13px] font-medium text-graphite-600 dark:text-graphite-300;
@@ -100,6 +127,113 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* ===================== VIDRO (estilo Liquid Glass) ===================== */
+@utility glass {
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.5));
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --glass-rim: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 10px 34px -14px rgba(15, 28, 53, 0.28), 0 2px 6px -2px rgba(15, 28, 53, 0.08);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -1px 0 rgba(255, 255, 255, 0.3);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), var(--glass-inset);
+  -webkit-backdrop-filter: blur(24px) saturate(185%);
+  backdrop-filter: blur(24px) saturate(185%);
+  isolation: isolate;
+  &:where(.dark, .dark *) {
+    --glass-bg: linear-gradient(180deg, rgba(44, 48, 64, 0.58), rgba(20, 22, 30, 0.46));
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-rim: rgba(255, 255, 255, 0.28);
+    --glass-shadow: 0 12px 38px -14px rgba(0, 0, 0, 0.7);
+    --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  }
+}
+/* versão mais opaca: barras, menus e janelas (leitura de texto) */
+@utility glass-strong {
+  @apply glass;
+  --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.68));
+  &:where(.dark, .dark *) {
+    --glass-bg: linear-gradient(180deg, rgba(36, 40, 54, 0.78), rgba(18, 20, 28, 0.7));
+  }
+}
+/* vidro escuro fixo: menu lateral */
+@utility glass-navy {
+  @apply glass;
+  --glass-bg: linear-gradient(180deg, rgba(23, 39, 69, 0.93), rgba(10, 22, 48, 0.9));
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-rim: rgba(255, 255, 255, 0.35);
+  --glass-shadow: 0 20px 50px -20px rgba(6, 12, 30, 0.7);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  &:where(.dark, .dark *) {
+    --glass-bg: linear-gradient(180deg, rgba(23, 39, 69, 0.62), rgba(10, 16, 34, 0.58));
+  }
+}
+/* reflexo de luz na borda (rim light) */
+@utility glass-rim {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: linear-gradient(140deg, var(--glass-rim, rgba(255, 255, 255, 0.9)) 0%, transparent 32%, transparent 68%, color-mix(in srgb, var(--glass-rim, white) 55%, transparent) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+/* fica na camada de componentes para que utilitários (sticky, absolute) prevaleçam */
+@layer components {
+  .card {
+    position: relative;
+  }
+  .card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: linear-gradient(140deg, var(--glass-rim) 0%, transparent 30%, transparent 70%, color-mix(in srgb, var(--glass-rim) 50%, transparent) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+}
+
+/* sem transparência: preferência do usuário/aparelho ou opção do app */
+@media (prefers-reduced-transparency: reduce) {
+  .glass, .glass-strong, .glass-navy, .card, .input {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    --glass-bg: #ffffff;
+  }
+  .dark :is(.glass, .glass-strong, .card) {
+    --glass-bg: #1b1e27;
+  }
+  .glass-navy {
+    --glass-bg: #0f1c35 !important;
+  }
+}
+html.no-glass :is(.glass, .glass-strong, .glass-navy, .card, .input) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.no-glass :is(.glass, .glass-strong, .card) {
+  --glass-bg: #ffffff;
+}
+html.no-glass.dark :is(.glass, .glass-strong, .card) {
+  --glass-bg: #1b1e27;
+}
+html.no-glass .glass-navy {
+  --glass-bg: #0f1c35;
+}
+html.no-glass body::before {
+  display: none;
 }
 
 html.compact {
