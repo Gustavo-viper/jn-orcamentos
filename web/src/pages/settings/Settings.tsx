@@ -155,8 +155,8 @@ function CompanyPanel() {
       <CardHeader title="Dados da empresa" subtitle="Aparecem no cabeçalho dos orçamentos, PDFs e portal do cliente." icon={<Building2 className="h-4 w-4" />} />
       <fieldset disabled={ro} className="grid gap-4 p-5 sm:grid-cols-6">
         <div className="flex items-center gap-4 sm:col-span-6">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-graphite-100 ring-1 ring-graphite-200 dark:bg-white/5 dark:ring-white/10">
-            <img src={f.logo || '/logo.svg'} alt="Logotipo" className="h-full w-full object-contain" />
+          <div className="flex h-20 w-44 items-center justify-center overflow-hidden rounded-2xl bg-graphite-900 p-2 ring-1 ring-graphite-200 dark:ring-white/10">
+            <img src={f.logo || '/logo-jn.webp'} alt="Logotipo" className="h-full w-full object-contain" />
           </div>
           <div className="space-y-2">
             <label className={clsx('inline-flex cursor-pointer items-center gap-2 rounded-xl border border-graphite-200 px-3 py-2 text-sm font-medium hover:bg-graphite-50 dark:border-white/10 dark:hover:bg-white/5', ro && 'pointer-events-none opacity-50')}>
@@ -176,7 +176,7 @@ function CompanyPanel() {
                 }}
               />
             </label>
-            {f.logo && <Button size="sm" variant="ghost" onClick={() => set('logo', null)}>Usar logotipo padrão</Button>}
+            {f.logo && <Button size="sm" variant="ghost" onClick={() => set('logo', null)}>Usar a logo oficial</Button>}
             <p className="text-xs text-graphite-500">PNG ou JPG. A imagem é redimensionada automaticamente.</p>
           </div>
         </div>

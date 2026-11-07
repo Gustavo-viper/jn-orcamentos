@@ -201,7 +201,7 @@ function Shell({ children, company }: { children: React.ReactNode; company?: Com
     <div className="min-h-dvh bg-graphite-50 text-graphite-900">
       <header className="bg-gradient-to-r from-navy-900 to-navy-950">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-5 py-4">
-          <img src={company?.logo || '/logo.svg'} alt="" className="h-10 w-10 rounded-xl object-contain" />
+          <img src={company?.logo || '/logo-jn.webp'} alt="" className="h-14 w-auto object-contain" />
           <div>
             <div className="font-semibold text-white">{company?.name || 'J&N Decorações em Gesso'}</div>
             <div className="text-xs text-gold-200/80">Portal do cliente</div>

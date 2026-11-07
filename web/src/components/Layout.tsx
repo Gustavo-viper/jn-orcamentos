@@ -136,12 +136,9 @@ export function Layout() {
     <div className="min-h-dvh lg:pl-64">
       {/* Menu lateral (desktop) */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-gradient-to-b from-navy-900 to-navy-950 lg:flex">
-        <div className="flex h-16 items-center gap-3 px-5">
-          <Logo className="h-9 w-9" />
-          <div className="leading-tight">
-            <div className="text-[15px] font-semibold text-white">J&N Orçamentos</div>
-            <div className="text-[11px] text-gold-300/80">Decorações em Gesso</div>
-          </div>
+        <div className="px-5 pt-5 pb-3">
+          <Logo className="h-auto w-full drop-shadow-[0_4px_12px_rgba(0,0,0,0.35)]" />
+          <div className="mt-2 text-center text-[11px] font-medium tracking-[0.2em] text-gold-300/80 uppercase">Orçamentos</div>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3" aria-label="Menu principal">
           {items.map((n) => (
@@ -169,8 +166,9 @@ export function Layout() {
       <header className="sticky top-0 z-20 border-b border-graphite-200/60 bg-graphite-50/85 backdrop-blur-md dark:border-white/5 dark:bg-graphite-950/80">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 lg:h-16 lg:px-8" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <div className="flex items-center gap-2 lg:hidden">
-            <Logo className="h-8 w-8" />
-            <span className="text-[15px] font-semibold whitespace-nowrap">J&N Orçamentos</span>
+            <span className="rounded-xl bg-gradient-to-b from-navy-900 to-navy-950 px-2 py-0.5 shadow-sm">
+              <Logo className="h-9 w-auto" />
+            </span>
           </div>
           <div className="flex-1" />
           <SyncBadge />

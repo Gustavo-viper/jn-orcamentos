@@ -36,7 +36,7 @@ let defaultLogo: string | null = null;
 async function loadDefaultLogo(): Promise<string | null> {
   if (defaultLogo) return defaultLogo;
   try {
-    const blob = await (await fetch('/logo-256.png')).blob();
+    const blob = await (await fetch('/logo-jn-pdf.png')).blob();
     defaultLogo = await new Promise<string>((res, rej) => {
       const r = new FileReader();
       r.onload = () => res(String(r.result));
@@ -63,8 +63,17 @@ async function header(doc: jsPDF, company: CompanySettings, title: string, subti
   let x = 14;
   if (logo) {
     try {
-      doc.addImage(logo, imgFormat(logo), 14, 6, 22, 22);
-      x = 41;
+      // mantém a proporção da logo (a oficial é larga): altura máx. 24 mm, largura máx. 58 mm
+      const props = doc.getImageProperties(logo);
+      const ratio = props.width / props.height || 1;
+      let h = 24;
+      let w = h * ratio;
+      if (w > 58) {
+        w = 58;
+        h = w / ratio;
+      }
+      doc.addImage(logo, imgFormat(logo), 14, 5 + (24 - h) / 2, w, h);
+      x = 14 + w + 6;
     } catch {
       /* logotipo inválido */
     }

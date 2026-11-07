@@ -1,3 +1,4 @@
+/** Logo oficial da J&N Decorações em Gesso (fundo transparente). */
 export function Logo({ className }: { className?: string }) {
-  return <img src="/logo.svg" alt="J&N" className={className} width={36} height={36} draggable={false} />;
+  return <img src="/logo-jn.webp" alt="J&N Decorações em Gesso" className={`object-contain ${className ?? ''}`} width={1593} height={713} draggable={false} decoding="async" />;
 }

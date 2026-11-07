@@ -11,12 +11,8 @@ export function AuthShell({ children, title, subtitle }: { children?: ReactNode;
     <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       <div className="relative hidden overflow-hidden bg-gradient-to-br from-navy-900 via-navy-950 to-[#060d1d] lg:flex lg:flex-col lg:justify-between lg:p-12">
         <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'repeating-linear-gradient(90deg, #cfa75a 0 1px, transparent 1px 72px), repeating-linear-gradient(0deg, #cfa75a 0 1px, transparent 1px 72px)' }} />
-        <div className="relative flex items-center gap-3">
-          <Logo className="h-11 w-11" />
-          <div>
-            <div className="text-lg font-semibold text-white">J&N Orçamentos</div>
-            <div className="text-xs text-gold-300/80">J&N Decorações em Gesso</div>
-          </div>
+        <div className="relative">
+          <Logo className="h-auto w-72 drop-shadow-[0_8px_24px_rgba(0,0,0,0.45)]" />
         </div>
         <div className="relative max-w-md">
           <h2 className="text-3xl leading-tight font-semibold text-white">Orçamentos precisos, obras organizadas e financeiro sob controle.</h2>
@@ -27,12 +23,10 @@ export function AuthShell({ children, title, subtitle }: { children?: ReactNode;
       </div>
       <div className="flex items-center justify-center px-5 py-10">
         <div className="w-full max-w-sm animate-slide-up">
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <Logo className="h-11 w-11" />
-            <div>
-              <div className="text-lg font-semibold">J&N Orçamentos</div>
-              <div className="text-xs text-graphite-500">J&N Decorações em Gesso</div>
-            </div>
+          <div className="mb-8 flex justify-center lg:hidden">
+            <span className="rounded-2xl bg-gradient-to-b from-navy-900 to-navy-950 px-4 py-3 shadow-lg">
+              <Logo className="h-auto w-56" />
+            </span>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-graphite-500">{subtitle}</p>}

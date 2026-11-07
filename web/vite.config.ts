@@ -10,14 +10,14 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['logo.svg', 'logo-256.png', 'apple-touch-icon.png', 'favicon-64.png'],
+      includeAssets: ['logo-jn.webp', 'logo-jn-pdf.png', 'apple-touch-icon.png', 'favicon-64.png'],
       manifest: {
         name: 'J&N Orçamentos',
         short_name: 'J&N Orçamentos',
         description: 'Gestão de orçamentos, obras e financeiro — J&N Decorações em Gesso',
         lang: 'pt-BR',
         theme_color: '#0a1630',
-        background_color: '#0a1630',
+        background_color: '#0b0b0d',
         display: 'standalone',
         orientation: 'any',
         start_url: '/',
