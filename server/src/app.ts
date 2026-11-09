@@ -42,6 +42,15 @@ export function createApp() {
   app.use('/api', (req, res, next) => (req.path.startsWith('/sync/push') || req.path.startsWith('/admin/restore') ? next() : express.json({ limit: '1mb' })(req, res, next)));
 
   app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+  // Vínculo com o app Android (Trusted Web Activity): abre em tela cheia, sem barra do navegador
+  app.get('/.well-known/assetlinks.json', (_req, res) => {
+    const fingerprints = (process.env.ANDROID_CERT_SHA256 ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    res.json(
+      fingerprints.length
+        ? [{ relation: ['delegate_permission/common.handle_all_urls'], target: { namespace: 'android_app', package_name: process.env.ANDROID_PACKAGE ?? 'br.com.jndecoracoes.orcamentos', sha256_cert_fingerprints: fingerprints } }]
+        : [],
+    );
+  });
   // portal é público e não usa cookies de sessão
   app.use('/api/portal', portalRouter);
   app.use('/api', csrfGuard);

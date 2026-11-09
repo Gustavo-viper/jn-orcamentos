@@ -1,0 +1,46 @@
+{
+  "name": "jn-orcamentos-desktop",
+  "productName": "J&N Orçamentos",
+  "version": "1.0.0",
+  "description": "J&N Orçamentos — gestão da J&N Decorações em Gesso",
+  "author": "J&N Decorações em Gesso",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable --x64"
+  },
+  "build": {
+    "appId": "br.com.jndecoracoes.orcamentos",
+    "productName": "J&N Orçamentos",
+    "copyright": "J&N Decorações em Gesso",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "build/icon.png"
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "artifactName": "JN-Orcamentos-${version}-${arch}-${target}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "J&N Orçamentos",
+      "artifactName": "JN-Orcamentos-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "JN-Orcamentos-Portatil-${version}.${ext}"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  }
+}
