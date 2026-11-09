@@ -49,7 +49,13 @@ export function buildQuoteItem(p: BuildItemParams): QuoteItem {
   const negativeArea = +(p.negativeMeasures ?? []).reduce((sum, item) => sum + item.width * item.length, 0).toFixed(4);
   const negativePerimeter = +(p.negativeMeasures ?? []).reduce((sum, item) => sum + 2 * (item.width + item.length), 0).toFixed(4);
   const netArea = +Math.max(0, mr.area - negativeArea).toFixed(4);
-  const measureValue = service.measureType === "area" ? netArea : mr.linear;
+  const isNegative = service.name.toLowerCase().includes("negativo");
+
+const measureValue = isNegative
+  ? mr.perimeter
+  : service.measureType === "area"
+    ? netArea
+    : mr.linear;
   const wasteFactor = 1 + wastePercent / 100;
 
   let plateInfo: QuoteItem["plateInfo"];
