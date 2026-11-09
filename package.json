@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "desktop:dev": "npm run build -- --configLoader runner && electron .",
     "desktop:package": "node scripts/create-ico.mjs && npm run build -- --configLoader runner && electron-builder --win nsis --x64",
-    "desktop:publish": "node scripts/create-ico.mjs && npm run build -- --configLoader runner && electron-builder --win nsis --x64 --publish always"
+    "desktop:publish": "node scripts/create-ico.mjs && npm run build -- --configLoader runner && electron-builder --win nsis --x64 --publish always",
+    "start": "vite preview --host 0.0.0.0 --port $PORT"
   },
   "dependencies": {
     "clsx": "2.1.1",
@@ -73,12 +74,13 @@
       "createStartMenuShortcut": true,
       "shortcutName": "J&N Orçamentos"
     },
-    "publish": [{
-      "provider": "github",
-      "owner": "Gustavo-viper",
-      "repo": "jn-orcamentos",
-      "releaseType": "release"
-    }]
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Gustavo-viper",
+        "repo": "jn-orcamentos",
+        "releaseType": "release"
+      }
+    ]
   }
 }
-
