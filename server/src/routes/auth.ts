@@ -7,6 +7,7 @@ import * as s from '../db/schema.js';
 import { db, writeTx } from '../db/client.js';
 import { config } from '../config.js';
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../lib/errors.js';
+import { timingSafeEqual } from 'node:crypto';
 import { hashPassword, newId, newToken, sha256, verifyPassword } from '../lib/ids.js';
 import { logActivity } from '../services/audit.js';
 import {
@@ -32,8 +33,40 @@ const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: config.isTest ? 1
 
 export const authRouter = Router();
 
+/** Código exigido para criar conta pela tela de login (SIGNUP_CODE ou o APP_ENROLLMENT_CODE do sistema anterior). */
+const signupCode = () => (process.env.SIGNUP_CODE || process.env.APP_ENROLLMENT_CODE || '').trim();
+function codeMatches(given: string) {
+  const expected = signupCode();
+  if (!expected) return false;
+  const a = Buffer.from(sha256(given.trim().toUpperCase()));
+  const b = Buffer.from(sha256(expected.toUpperCase()));
+  return timingSafeEqual(a, b);
+}
+
 authRouter.get('/setup-status', async (_req, res) => {
-  res.json({ needsSetup: (await countUsers()) === 0, mailConfigured: mailConfigured() });
+  res.json({ needsSetup: (await countUsers()) === 0, mailConfigured: mailConfigured(), signupEnabled: !!signupCode() });
+});
+
+/**
+ * Cadastro pela tela de login. As contas são de administrador (uso interno da J&N),
+ * por isso exigem o código de cadastro — sem ele, ninguém de fora consegue criar conta.
+ * Não há limite de quantidade de contas.
+ */
+const registerLimiter = rateLimit({ windowMs: 60 * 60_000, limit: config.isTest ? 1000 : 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Muitas tentativas de cadastro. Aguarde e tente novamente.' } });
+authRouter.post('/register', registerLimiter, async (req, res) => {
+  const b = parse(
+    z.object({ name: z.string().trim().min(2, 'Informe seu nome').max(120), email: z.string().trim().email('E-mail inválido'), password: passwordSchema, code: z.string().max(200).default('') }),
+    req.body,
+  );
+  if (!signupCode()) throw forbidden('O cadastro de contas está desativado. Peça a um administrador para criar seu acesso.');
+  if (!codeMatches(b.code)) throw forbidden('Código de cadastro incorreto.');
+  if (await findUserByEmail(b.email)) throw conflict('Já existe uma conta com este e-mail. Use "Entrar" ou "Esqueci minha senha".');
+  const id = newId();
+  await db().insert(s.users).values({ id, name: b.name, email: b.email.toLowerCase(), passwordHash: await hashPassword(b.password), role: 'admin', permissions: {} });
+  await writeTx((tx) => logActivity(tx, { id, name: b.name }, 'users.register', 'users', id, `${b.name} criou a própria conta (administrador) pela tela de cadastro`));
+  await createSession(res, req, id);
+  const [u] = await db().select().from(s.users).where(eq(s.users.id, id));
+  res.json({ user: toSessionUser(u) });
 });
 
 /** Cria o primeiro administrador. Disponível somente enquanto não houver usuários. */

@@ -11,6 +11,7 @@ interface AuthCtx {
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
   setupAdmin: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   can: (m: Module, a?: Action) => boolean;
@@ -83,6 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [enter],
   );
+  const register = useCallback(
+    async (name: string, email: string, password: string, code: string) => {
+      const { user: u } = await api<{ user: SessionUser }>('/auth/register', { body: { name, email, password, code } });
+      await enter(u);
+    },
+    [enter],
+  );
   const logout = useCallback(async () => {
     try {
       await api('/auth/logout', { method: 'POST', body: {} });
@@ -98,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, ready, login, setupAdmin, logout, refresh, can: (m, a = 'view') => can(user, m, a) }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ user, ready, login, setupAdmin, register, logout, refresh, can: (m, a = 'view') => can(user, m, a) }}>{children}</Ctx.Provider>
   );
 }
 

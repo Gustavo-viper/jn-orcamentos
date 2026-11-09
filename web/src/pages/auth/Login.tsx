@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Lock, Mail, ShieldCheck, User } from 'lucide-react';
+import { KeyRound, Lock, Mail, ShieldCheck, User } from 'lucide-react';
 import { api, errorMessage, NetworkError } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { Button, Field, Input } from '../../components/ui';
@@ -49,10 +49,12 @@ function IconInput({ icon, ...p }: { icon: ReactNode } & React.InputHTMLAttribut
 }
 
 export default function Login() {
-  const { user, login, setupAdmin } = useAuth();
+  const { user, login, setupAdmin, register } = useAuth();
   const navigate = useNavigate();
   const loc = useLocation() as { state?: { from?: string } };
-  const [mode, setMode] = useState<'loading' | 'login' | 'setup' | 'forgot' | 'sent'>('loading');
+  const [mode, setMode] = useState<'loading' | 'login' | 'setup' | 'forgot' | 'sent' | 'register'>('loading');
+  const [code, setCode] = useState('');
+  const [signupEnabled, setSignupEnabled] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,9 +64,10 @@ export default function Login() {
   const [mailOk, setMailOk] = useState(true);
 
   useEffect(() => {
-    api<{ needsSetup: boolean; mailConfigured: boolean }>('/auth/setup-status')
+    api<{ needsSetup: boolean; mailConfigured: boolean; signupEnabled?: boolean }>('/auth/setup-status')
       .then((r) => {
         setMailOk(r.mailConfigured);
+        setSignupEnabled(!!r.signupEnabled);
         setMode(r.needsSetup ? 'setup' : 'login');
       })
       .catch(() => setMode('login'));
@@ -84,6 +87,10 @@ export default function Login() {
         if (password !== password2) throw new Error('As senhas não conferem.');
         await setupAdmin(name, email, password);
         navigate('/configuracoes?aba=empresa', { replace: true });
+      } else if (mode === 'register') {
+        if (password !== password2) throw new Error('As senhas não conferem.');
+        await register(name, email, password, code);
+        navigate('/', { replace: true });
       } else if (mode === 'forgot') {
         await api('/auth/forgot', { body: { email } });
         setMode('sent');
@@ -111,13 +118,13 @@ export default function Login() {
       </AuthShell>
     );
 
-  const titles = { login: ['Entrar', 'Acesse com seu e-mail e senha.'], setup: ['Configuração inicial', 'Crie a conta do administrador da J&N.'], forgot: ['Recuperar senha', 'Informe o e-mail cadastrado.'] } as const;
+  const titles = { login: ['Entrar', 'Acesse com seu e-mail e senha.'], setup: ['Configuração inicial', 'Crie a conta do administrador da J&N.'], forgot: ['Recuperar senha', 'Informe o e-mail cadastrado.'], register: ['Criar conta', 'Cadastro de administradores da J&N.'] } as const;
   const [title, subtitle] = titles[mode];
 
   return (
     <AuthShell title={title} subtitle={subtitle}>
       <form onSubmit={submit} className="space-y-4">
-        {mode === 'setup' && (
+        {(mode === 'setup' || mode === 'register') && (
           <Field label="Seu nome" required>
             <IconInput icon={<User className="h-4 w-4" />} value={name} onChange={(e) => setName(e.target.value)} required autoComplete="name" />
           </Field>
@@ -126,22 +133,40 @@ export default function Login() {
           <IconInput icon={<Mail className="h-4 w-4" />} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" autoFocus />
         </Field>
         {mode !== 'forgot' && (
-          <Field label="Senha" required hint={mode === 'setup' ? 'Mínimo de 8 caracteres, com letras e números.' : undefined}>
-            <IconInput icon={<Lock className="h-4 w-4" />} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === 'setup' ? 'new-password' : 'current-password'} />
+          <Field label="Senha" required hint={mode === 'setup' || mode === 'register' ? 'Mínimo de 8 caracteres, com letras e números.' : undefined}>
+            <IconInput icon={<Lock className="h-4 w-4" />} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete={mode === 'setup' || mode === 'register' ? 'new-password' : 'current-password'} />
           </Field>
         )}
-        {mode === 'setup' && (
+        {(mode === 'setup' || mode === 'register') && (
           <Field label="Confirmar senha" required>
             <IconInput icon={<Lock className="h-4 w-4" />} type="password" value={password2} onChange={(e) => setPassword2(e.target.value)} required autoComplete="new-password" />
           </Field>
         )}
+        {mode === 'register' && (
+          <Field label="Código de cadastro" required hint="Código interno da J&N, fornecido pelo administrador.">
+            <IconInput icon={<KeyRound className="h-4 w-4" />} value={code} onChange={(e) => setCode(e.target.value)} required autoComplete="off" />
+          </Field>
+        )}
         {error && <p className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300" role="alert">{error}</p>}
-        <Button type="submit" size="lg" className="w-full" loading={busy} icon={mode === 'setup' ? <ShieldCheck className="h-4 w-4" /> : undefined}>
-          {mode === 'login' ? 'Entrar' : mode === 'setup' ? 'Criar administrador' : 'Enviar link'}
+        <Button type="submit" size="lg" className="w-full" loading={busy} icon={mode === 'setup' || mode === 'register' ? <ShieldCheck className="h-4 w-4" /> : undefined}>
+          {mode === 'login' ? 'Entrar' : mode === 'setup' ? 'Criar administrador' : mode === 'register' ? 'Criar conta' : 'Enviar link'}
         </Button>
         {mode === 'login' && (
           <button type="button" className="w-full text-center text-sm text-navy-600 hover:underline dark:text-gold-300" onClick={() => { setError(null); setMode('forgot'); }}>
             Esqueci minha senha
+          </button>
+        )}
+        {mode === 'login' && signupEnabled && (
+          <div className="border-t border-graphite-200/70 pt-4 text-center text-sm dark:border-white/10">
+            <span className="text-graphite-500">Ainda não tem conta? </span>
+            <button type="button" className="font-semibold text-navy-700 hover:underline dark:text-gold-300" onClick={() => { setError(null); setPassword(''); setPassword2(''); setMode('register'); }}>
+              Criar conta
+            </button>
+          </div>
+        )}
+        {mode === 'register' && (
+          <button type="button" className="w-full text-center text-sm text-graphite-500 hover:underline" onClick={() => { setError(null); setMode('login'); }}>
+            Já tenho conta — entrar
           </button>
         )}
         {mode === 'forgot' && (

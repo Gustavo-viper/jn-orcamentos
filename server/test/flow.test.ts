@@ -309,6 +309,30 @@ describe('permissões', () => {
   });
 });
 
+describe('cadastro pela tela de login', () => {
+  it('exige o código de cadastro e cria administrador', async () => {
+    process.env.SIGNUP_CODE = 'codigo-teste-123';
+    const st = await request(app).get('/api/auth/setup-status');
+    expect(st.body.signupEnabled).toBe(true);
+    const wrong = await request(app).post('/api/auth/register').set(H).send({ name: 'Pessoa Teste', email: 'nova@teste.local', password: 'senhaNova1', code: 'errado' });
+    expect(wrong.status).toBe(403);
+    const ok = request.agent(app);
+    const r = await ok.post('/api/auth/register').set(H).send({ name: 'Pessoa Teste', email: 'nova@teste.local', password: 'senhaNova1', code: 'CODIGO-TESTE-123' });
+    expect(r.status).toBe(200);
+    expect(r.body.user.role).toBe('admin');
+    expect((await ok.get('/api/sync/pull')).status).toBe(200); // já entra logado
+    const dup = await request(app).post('/api/auth/register').set(H).send({ name: 'Outra', email: 'NOVA@teste.local', password: 'senhaNova1', code: 'codigo-teste-123' });
+    expect(dup.status).toBe(409);
+  });
+  it('sem código configurado o cadastro fica desativado', async () => {
+    delete process.env.SIGNUP_CODE;
+    delete process.env.APP_ENROLLMENT_CODE;
+    expect((await request(app).get('/api/auth/setup-status')).body.signupEnabled).toBe(false);
+    const r = await request(app).post('/api/auth/register').set(H).send({ name: 'Pessoa X', email: 'x2@teste.local', password: 'senhaNova1', code: 'qualquer' });
+    expect(r.status).toBe(403);
+  });
+});
+
 describe('backup', () => {
   it('cria backup e restauração exige confirmação explícita', async () => {
     const b = await admin.post('/api/admin/backups').set(H).send({});
