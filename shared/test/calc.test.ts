@@ -76,9 +76,9 @@ describe('cálculos geométricos', () => {
   it('medidas negativas são tratadas como zero', () => {
     expect(area(-4, 5)).toBe(0);
   });
-  it('paredes: perímetro × altura', () => {
+  it('paredes: comprimento × altura (sem largura)', () => {
     const r = calculateQuote(quote({ environments: [env({ surface: 'walls' })] }), services, products);
-    expect(r.environments[0].grossArea).toBe(50.4);
+    expect(r.environments[0].grossArea).toBe(14);
   });
 });
 

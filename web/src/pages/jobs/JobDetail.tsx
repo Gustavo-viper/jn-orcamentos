@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarClock, CheckCircle2, FileDown, MessageSquarePlus, Package, Pause, Pencil, Play, Plus, Trash2, X, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarClock, CheckCircle2, MessageSquarePlus, Package, Pause, Pencil, Play, Plus, Trash2, X, XCircle } from 'lucide-react';
 import { JOB_EVENT_LABEL, JOB_TRANSITIONS, formatJobNumber, formatQuoteNumber, roundTo, todayISO, type Job, type JobMaterial, type JobStatus } from '@jn/shared';
 import { getDb } from '../../lib/db';
-import { deleteRecord, runCommand, saveRecord, useCompany, useRecord, useTable, useWhere } from '../../lib/data';
+import { deleteRecord, runCommand, saveRecord, useRecord, useTable, useWhere } from '../../lib/data';
 import { useAuth } from '../../lib/auth';
 import { uuid } from '../../lib/ids';
 import { fmtDate, fmtDateTime, formatBRL, formatNumber } from '../../lib/format';
-import { buildJobCompletionPdf } from '../../lib/pdf';
 import { FinanceStatusBadge, JobStatusBadge } from '../../lib/status';
 import { Button, Card, CardHeader, Checkbox, confirmDialog, EmptyState, Field, Input, KeyValue, LoadingBlock, Modal, MoneyInput, NumberInput, PageHeader, Select, Textarea, toast } from '../../components/ui';
 
@@ -24,7 +23,6 @@ export default function JobDetail() {
   const events = useWhere('jobEvents', 'jobId', id);
   const entries = useWhere('financeEntries', 'jobId', id);
   const products = useTable('products');
-  const company = useCompany();
   const { can, user } = useAuth();
   const navigate = useNavigate();
   const [note, setNote] = useState('');
@@ -36,7 +34,7 @@ export default function JobDetail() {
   const timeline = useMemo(() => [...(events ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [events]);
 
   if (job === undefined) return <LoadingBlock />;
-  if (!job || job.deletedAt) return <EmptyState title="Ordem de serviço não encontrada" action={<Button onClick={() => navigate('/obras')}>Voltar</Button>} />;
+  if (!job || job.deletedAt) return <EmptyState title="Controle de material não encontrado" action={<Button onClick={() => navigate('/obras')}>Voltar</Button>} />;
   const canEdit = can('jobs', 'edit');
   const closed = job.status === 'completed' || job.status === 'cancelled';
   const allowed = JOB_TRANSITIONS[job.status];
@@ -68,11 +66,6 @@ export default function JobDetail() {
     setNote('');
   };
 
-  const downloadReceipt = async () => {
-    const doc = await buildJobCompletionPdf(job, client ?? null, company, events ?? [], quote?.number ?? null);
-    doc.save(`Conclusao-${formatJobNumber(job.number)}.pdf`);
-  };
-
   const remove = async () => {
     if (!(await confirmDialog({ title: 'Excluir OS', message: 'Somente OS aguardando ou canceladas, sem consumo de materiais, podem ser excluídas.', danger: true, confirmLabel: 'Excluir' }))) return;
     await deleteRecord('jobs', job.id, `Excluir ${formatJobNumber(job.number)}`);
@@ -82,12 +75,11 @@ export default function JobDetail() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        back={<Link to="/obras" className="mb-2 inline-flex items-center gap-1 text-sm text-graphite-500 hover:text-graphite-800"><ArrowLeft className="h-4 w-4" /> Obras</Link>}
+        back={<Link to="/obras" className="mb-2 inline-flex items-center gap-1 text-sm text-graphite-500 hover:text-graphite-800"><ArrowLeft className="h-4 w-4" /> Controle de material</Link>}
         title={<span className="flex flex-wrap items-center gap-3">{formatJobNumber(job.number)} <JobStatusBadge status={job.status} /></span>}
         subtitle={<>{client ? <Link className="hover:underline" to={`/clientes/${client.id}`}>{client.name}</Link> : '—'}{quote && <> · origem <Link className="hover:underline" to={`/orcamentos/${quote.id}`}>{formatQuoteNumber(quote.number)}</Link></>}</>}
         actions={
           <>
-            {job.status === 'completed' && <Button variant="gold" icon={<FileDown className="h-4 w-4" />} onClick={downloadReceipt}>Comprovante de conclusão</Button>}
             {canEdit && !closed && <Button variant="outline" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditOpen(true)}>Editar</Button>}
             {can('jobs', 'delete') && ['waiting', 'cancelled'].includes(job.status) && <Button variant="ghost" size="icon" onClick={remove} aria-label="Excluir"><Trash2 className="h-4 w-4 text-red-500" /></Button>}
           </>
@@ -138,7 +130,7 @@ export default function JobDetail() {
 
         <div className="min-w-0 space-y-5">
           <Card>
-            <CardHeader title="Materiais" subtitle="Previstos no orçamento × consumo real" icon={<Package className="h-4 w-4" />} action={canEdit && !closed && <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setConsumeOpen(true)}>Registrar consumo</Button>} />
+            <CardHeader title="Material de drywall" subtitle="Previsto × consumido (uso interno)" icon={<Package className="h-4 w-4" />} action={canEdit && !closed && <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setConsumeOpen(true)}>Registrar consumo</Button>} />
             {job.materials.length ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[480px]">

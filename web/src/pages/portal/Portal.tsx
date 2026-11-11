@@ -115,14 +115,13 @@ export default function Portal() {
         <div className="border-b border-graphite-100 px-5 py-3 text-sm font-semibold">Serviços</div>
         <ul className="divide-y divide-graphite-100">
           {c.environments.map((e, i) => {
-            const env = quote.environments.find((x) => x.id === e.envId) ?? quote.environments[i];
             return (
               <li key={i} className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-center">
                 <div className="flex-1">
                   <div className="font-medium">{e.name}</div>
                   <div className="text-xs text-graphite-500">
                     {e.serviceName} ·{' '}
-                    {e.measurementType === 'm2' ? `${formatNumber(e.netArea, 2)} m² (${formatNumber(env?.width ?? 0, 2)} × ${formatNumber(env?.length ?? 0, 2)} m${e.deductedArea ? `, descontados ${formatNumber(e.deductedArea, 2)} m²` : ''})` : e.measurementType === 'ml' ? `${formatNumber(e.linear, 2)} m lineares` : `${formatNumber(e.quantity, 2)} ${e.chargeUnit}`}
+                    {e.measurementType === 'm2' ? `${formatNumber(e.netArea, 2)} m²` : e.measurementType === 'ml' ? `${formatNumber(e.linear, 2)} m lineares` : `${formatNumber(e.quantity, 2)} ${e.chargeUnit}`}
                   </div>
                 </div>
                 <div className="tabular font-semibold">{formatBRL(e.price)}</div>
@@ -130,14 +129,6 @@ export default function Portal() {
             );
           })}
         </ul>
-        {c.materials.length > 0 && (
-          <div className="border-t border-graphite-100 px-5 py-3">
-            <div className="mb-1 text-xs font-semibold text-graphite-500 uppercase">Materiais previstos</div>
-            <div className="flex flex-wrap gap-1.5">
-              {c.materials.map((m) => <Badge key={m.productId}>{m.name}: {formatNumber(m.qty, 3)} {m.unit}</Badge>)}
-            </div>
-          </div>
-        )}
         <div className="space-y-1 border-t border-graphite-100 bg-graphite-50/60 px-5 py-4 text-sm">
           <div className="flex justify-between"><span className="text-graphite-500">Subtotal</span><span className="tabular">{formatBRL(c.subtotal)}</span></div>
           {c.discount > 0 && <div className="flex justify-between text-red-600"><span>Desconto</span><span className="tabular">− {formatBRL(c.discount)}</span></div>}

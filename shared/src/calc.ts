@@ -14,7 +14,7 @@ import { ceilSafe, cents, roundTo } from './money.js';
 export type MeasurementType = 'm2' | 'ml' | 'unit';
 export type PricingMode = 'cost_plus' | 'fixed';
 export type LinearBasis = 'perimeter' | 'width' | 'length';
-/** floor = teto/piso (largura × comprimento); walls = paredes (perímetro × altura). */
+/** floor = teto/piso (largura × comprimento); walls = paredes (comprimento × altura). */
 export type Surface = 'floor' | 'walls';
 export type DiscountType = 'none' | 'pct' | 'value';
 
@@ -199,7 +199,7 @@ export function calculateEnvironment(
 
   const per = perimeter(width, length);
   const surface: Surface = env.surface ?? 'floor';
-  const grossArea = surface === 'walls' ? roundTo(per * height, 4) : area(width, length);
+  const grossArea = surface === 'walls' ? roundTo(length * height, 4) : area(width, length);
 
   const deductions = (env.deductions ?? []).map((d) => ({
     area: roundTo(nonNeg(d.width) * nonNeg(d.length) * Math.max(1, nonNeg(d.quantity ?? 1)), 4),

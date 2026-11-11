@@ -29,7 +29,7 @@ import { buildQuotePdf, printPdf } from '../../lib/pdf';
 import { QuoteStatusBadge } from '../../lib/status';
 import { QuoteSummary } from '../../components/QuoteSummary';
 import { ChangeHistory } from '../../components/History';
-import { Badge, Button, Card, CardHeader, Checkbox, confirmDialog, EmptyState, Field, Input, LoadingBlock, Modal, PageHeader, Tabs, Textarea, toast } from '../../components/ui';
+import { Button, Card, CardHeader, Checkbox, confirmDialog, EmptyState, Field, Input, LoadingBlock, Modal, PageHeader, Tabs, Textarea, toast } from '../../components/ui';
 
 export default function QuoteView() {
   const { id } = useParams();
@@ -210,7 +210,7 @@ export default function QuoteView() {
                 {activeJob ? (
                   <Button variant="outline" icon={<HardHat className="h-4 w-4" />} onClick={() => navigate(`/obras/${activeJob.id}`)}>Ver {formatJobNumber(activeJob.number)}</Button>
                 ) : (
-                  can('jobs', 'create') && <Button icon={<HardHat className="h-4 w-4" />} onClick={() => setJobOpen(true)}>Gerar ordem de serviço</Button>
+                  can('jobs', 'create') && <Button icon={<HardHat className="h-4 w-4" />} onClick={() => setJobOpen(true)}>Gerar controle de material</Button>
                 )}
               </>
             )}
@@ -228,34 +228,16 @@ export default function QuoteView() {
                 <Card className="p-6 text-sm text-graphite-500">Cálculo indisponível.</Card>
               ) : (
                 calc.environments.map((r, i) => {
-                  const e = quote.environments.find((x) => x.id === r.envId) ?? quote.environments[i];
                   return (
                     <Card key={r.envId + i}>
                       <CardHeader title={r.name} subtitle={`${r.serviceName}${svcDesc.get(r.serviceId) ? ` — ${svcDesc.get(r.serviceId)}` : ''}`} action={<span className="tabular text-base font-semibold">{formatBRL(r.price)}</span>} />
                       <div className="grid grid-cols-2 gap-3 p-4 text-sm sm:grid-cols-4">
-                        {r.measurementType !== 'unit' && <Info label="Medidas" value={`${formatNumber(e?.width ?? 0, 2)} × ${formatNumber(e?.length ?? 0, 2)} m${e?.height ? ` · h ${formatNumber(e.height, 2)} m` : ''}`} />}
-                        {r.measurementType === 'm2' && <Info label="Área líquida" value={`${formatNumber(r.netArea, 2)} m²`} hint={r.deductedArea ? `bruta ${formatNumber(r.grossArea, 2)} − ${formatNumber(r.deductedArea, 2)}` : undefined} />}
-                        {r.measurementType === 'ml' && <Info label="Metro linear" value={`${formatNumber(r.linear, 2)} m`} />}
-                        {r.measurementType === 'unit' && <Info label="Quantidade" value={`${formatNumber(r.quantity, 2)} ${r.chargeUnit}`} />}
-                        <Info label="Desperdício" value={`${formatNumber(r.wastePct, 2)}%`} />
-                        {r.pricingMode === 'fixed' ? <Info label="Preço fixo" value={formatBRL(r.price)} /> : <Info label="Mão de obra" value={formatBRL(r.laborCost)} hint={`${formatBRL(r.laborPrice)}/${r.chargeUnit}`} />}
-                        <Info label="Materiais" value={formatBRL(r.materialCost)} />
-                        {r.plates > 0 && <Info label="Placas" value={String(r.plates)} />}
+                        {r.measurementType === 'm2' && <Info label={r.serviceName} value={`${formatNumber(r.netArea, 2)} m²`} />}
+                        {r.measurementType === 'ml' && <Info label={r.serviceName} value={`${formatNumber(r.linear, 2)} m`} />}
+                        {r.measurementType === 'unit' && <Info label={r.serviceName} value={`${formatNumber(r.quantity, 2)} ${r.chargeUnit}`} />}
+                        {r.measurementType !== 'unit' && <Info label="Negativo" value={`${formatNumber(r.perimeter, 2)} m`} />}
+                        <Info label="Total do serviço" value={formatBRL(r.pricingMode === 'fixed' ? r.price : r.laborCost)} />
                       </div>
-                      {(e?.deductions ?? []).length > 0 && (
-                        <div className="border-t border-graphite-100 px-4 py-2 text-xs text-graphite-500 dark:border-white/5">
-                          Descontos: {e!.deductions.map((d) => `${d.label || 'vão'} ${formatNumber(d.width, 2)}×${formatNumber(d.length, 2)}${(d.quantity ?? 1) > 1 ? ` (${d.quantity}×)` : ''}`).join(' · ')}
-                        </div>
-                      )}
-                      {r.materials.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 border-t border-graphite-100 px-4 py-3 dark:border-white/5">
-                          {r.materials.map((m) => (
-                            <Badge key={m.productId}>
-                              {m.name}: {formatNumber(m.qty, 3)} {m.unit}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
                     </Card>
                   );
                 })
@@ -434,7 +416,7 @@ function JobFromQuoteModal({ open, onClose, quote }: { open: boolean; onClose: (
       },
     });
     setBusy(false);
-    toast('Ordem de serviço criada.');
+    toast('Controle de material criado.');
     onClose();
     navigate(`/obras/${jobId}`);
   };
@@ -442,7 +424,7 @@ function JobFromQuoteModal({ open, onClose, quote }: { open: boolean; onClose: (
     <Modal
       open={open}
       onClose={onClose}
-      title="Gerar ordem de serviço"
+      title="Gerar controle de material"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
@@ -458,7 +440,7 @@ function JobFromQuoteModal({ open, onClose, quote }: { open: boolean; onClose: (
         <Field className="sm:col-span-2" label="Equipe responsável">
           <Input value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Ex.: João e Pedro" />
         </Field>
-        <Field label="Data de início" hint="Se informada, a OS fica Agendada.">
+        <Field label="Data de início" hint="Se informada, o controle fica Agendado.">
           <Input type="date" value={start} min={todayISO()} onChange={(e) => setStart(e.target.value)} />
         </Field>
         <Field label="Previsão de conclusão">

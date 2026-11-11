@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Calculator, ChevronDown, ChevronUp, Copy, History, Layers, Plus, RotateCcw, Save, Send, Trash2, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, Calculator, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, ChevronUp, Copy, History, Layers, Plus, RotateCcw, Save, Send, Trash2, UserPlus, X } from 'lucide-react';
 import {
   addDaysISO,
   calculateQuote,
@@ -62,6 +62,9 @@ export default function QuoteEditor() {
   const [busy, setBusy] = useState<'draft' | 'pending' | null>(null);
   const [newClient, setNewClient] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  // Ambientes recolhidos (só visual, não é salvo no orçamento).
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const toggleEnv = (id: string) => setCollapsed((c) => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const initialized = useRef(false);
 
   // ---------- inicialização ----------
@@ -259,9 +262,21 @@ export default function QuoteEditor() {
             <h2 className="flex items-center gap-2 text-base font-semibold">
               <Layers className="h-5 w-5 text-navy-500 dark:text-gold-300" /> Ambientes <Badge tone="blue">{doc.environments.length}</Badge>
             </h2>
-            <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => addEnv()} disabled={!activeServices.length}>
-              Adicionar ambiente
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              {doc.environments.length > 1 && (
+                <>
+                  <Button size="sm" variant="ghost" icon={<ChevronsDownUp className="h-4 w-4" />} onClick={() => setCollapsed(new Set(doc.environments.map((e) => e.id)))} title="Recolher todos os ambientes">
+                    <span className="hidden sm:inline">Recolher todos</span>
+                  </Button>
+                  <Button size="sm" variant="ghost" icon={<ChevronsUpDown className="h-4 w-4" />} onClick={() => setCollapsed(new Set())} title="Expandir todos os ambientes">
+                    <span className="hidden sm:inline">Expandir todos</span>
+                  </Button>
+                </>
+              )}
+              <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => addEnv()} disabled={!activeServices.length}>
+                Adicionar ambiente
+              </Button>
+            </div>
           </div>
           {!activeServices.length && (
             <Card className="p-5 text-sm">
@@ -278,6 +293,8 @@ export default function QuoteEditor() {
               key={env.id}
               env={env}
               index={i}
+              collapsed={collapsed.has(env.id)}
+              onToggle={() => toggleEnv(env.id)}
               result={calc.environments[i]}
               services={catalog.services.filter((s) => s.active || s.id === env.serviceId)}
               onChange={(p) => setEnv(i, p)}
@@ -450,6 +467,8 @@ function ClientPicker({ clients, value, onChange }: { clients: Client[]; value: 
 function EnvironmentCard({
   env,
   index,
+  collapsed,
+  onToggle,
   result,
   services,
   onChange,
@@ -459,6 +478,8 @@ function EnvironmentCard({
 }: {
   env: EnvironmentInput;
   index: number;
+  collapsed: boolean;
+  onToggle: () => void;
   result: EnvironmentResult | undefined;
   services: { id: string; name: string; measurementType: string; chargeUnit: string; laborPrice: number; pricingMode: string; active: boolean }[];
   onChange: (p: Partial<EnvironmentInput>) => void;
@@ -468,12 +489,17 @@ function EnvironmentCard({
 }) {
   const svc = services.find((s) => s.id === env.serviceId);
   const type = svc?.measurementType ?? 'm2';
+  // Parede: medida = comprimento × altura (sem largura).
+  const isWall = type === 'm2' && (env.surface ?? 'floor') === 'walls';
   const [customLabor, setCustomLabor] = useState(env.laborPriceOverride != null);
   const setDed = (i: number, p: Partial<Deduction>) => onChange({ deductions: env.deductions.map((d, j) => (j === i ? { ...d, ...p } : d)) });
 
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-graphite-100 bg-graphite-50/50 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02]">
+      <div className={clsx('flex items-center gap-2 bg-graphite-50/50 px-4 py-3 dark:bg-white/[0.02]', !collapsed && 'border-b border-graphite-100 dark:border-white/5')}>
+        <Button variant="ghost" size="icon" onClick={onToggle} aria-expanded={!collapsed} aria-label={collapsed ? 'Expandir ambiente' : 'Recolher ambiente'} title={collapsed ? 'Expandir ambiente' : 'Recolher ambiente'}>
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </Button>
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-navy-800 text-xs font-semibold text-white dark:bg-gold-400 dark:text-navy-950">{index + 1}</span>
         <Input className="h-9 flex-1 border-transparent bg-transparent font-semibold focus:bg-white dark:bg-transparent" value={env.name} onChange={(e) => onChange({ name: e.target.value })} aria-label="Nome do ambiente" />
         <div className="tabular hidden text-right text-sm font-semibold sm:block">{formatBRL(result?.price ?? 0)}</div>
@@ -482,6 +508,7 @@ function EnvironmentCard({
         <Button variant="ghost" size="icon" onClick={onDuplicate} aria-label="Duplicar ambiente" title="Duplicar ambiente"><Copy className="h-4 w-4" /></Button>
         <Button variant="ghost" size="icon" onClick={onRemove} aria-label="Remover ambiente"><Trash2 className="h-4 w-4 text-red-500" /></Button>
       </div>
+      {!collapsed && (
       <div className="grid gap-4 p-4 sm:grid-cols-6">
         <Field className="sm:col-span-4" label="Tipo de serviço">
           <Select value={env.serviceId} onChange={(e) => onChange({ serviceId: e.target.value, laborPriceOverride: null })}>
@@ -502,7 +529,7 @@ function EnvironmentCard({
             <div className="flex gap-2">
               {(['floor', 'walls'] as Surface[]).map((s) => (
                 <button key={s} type="button" onClick={() => onChange({ surface: s })} className={clsx('flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition', (env.surface ?? 'floor') === s ? 'border-navy-600 bg-navy-50 text-navy-800 dark:border-gold-400/60 dark:bg-gold-400/10 dark:text-gold-200' : 'border-graphite-200 text-graphite-600 hover:bg-graphite-50 dark:border-white/10 dark:text-graphite-300')}>
-                  {s === 'floor' ? 'Teto / piso (L × C)' : 'Paredes (perímetro × altura)'}
+                  {s === 'floor' ? 'Teto / piso (L × C)' : 'Paredes (comprimento × altura)'}
                 </button>
               ))}
             </div>
@@ -510,9 +537,11 @@ function EnvironmentCard({
         )}
         {type !== 'unit' ? (
           <>
-            <Field className="sm:col-span-2" label="Largura">
-              <NumberInput value={env.width} onChange={(v) => onChange({ width: v ?? 0 })} decimals={3} min={0} suffix="m" />
-            </Field>
+            {!isWall && (
+              <Field className="sm:col-span-2" label="Largura">
+                <NumberInput value={env.width} onChange={(v) => onChange({ width: v ?? 0 })} decimals={3} min={0} suffix="m" />
+              </Field>
+            )}
             <Field className="sm:col-span-2" label="Comprimento">
               <NumberInput value={env.length} onChange={(v) => onChange({ length: v ?? 0 })} decimals={3} min={0} suffix="m" />
             </Field>
@@ -577,34 +606,25 @@ function EnvironmentCard({
           </div>
         )}
       </div>
+      )}
 
-      {/* Resultado do ambiente */}
+      {/* Resultado do ambiente (continua visível com o ambiente recolhido) */}
       {result && svc && (
         <div className="border-t border-graphite-100 bg-navy-50/40 px-4 py-3 dark:border-white/5 dark:bg-white/[0.02]">
           <div className="tabular flex flex-wrap gap-x-5 gap-y-1 text-xs text-graphite-600 dark:text-graphite-300">
             {type === 'm2' && (
               <>
-                <span>Área: <b>{formatNumber(result.grossArea, 2)} m²</b></span>
+                <span>{svc.name} = <b>{formatNumber(result.netArea, 2)} m²</b></span>
                 {result.deductedArea > 0 && <span>Descontos: <b>−{formatNumber(result.deductedArea, 2)} m²</b></span>}
-                <span>Líquida: <b>{formatNumber(result.netArea, 2)} m²</b></span>
               </>
             )}
-            <span>Perímetro: <b>{formatNumber(result.perimeter, 2)} m</b></span>
-            {type === 'ml' && <span>Metro linear: <b>{formatNumber(result.linear, 2)} m</b></span>}
+            {type === 'ml' && <span>{svc.name} = <b>{formatNumber(result.linear, 2)} m</b></span>}
+            {type === 'unit' && <span>{svc.name} = <b>{formatNumber(result.quantity, 2)} {svc.chargeUnit}</b></span>}
+            {type !== 'unit' && <span>Negativo: <b>{formatNumber(result.perimeter, 2)} m</b></span>}
             {result.plates > 0 && <span>Placas: <b>{result.plates}</b></span>}
-            <span>Materiais: <b>{formatBRL(result.materialCost)}</b></span>
-            {result.pricingMode === 'fixed' ? <span>Preço fixo: <b>{formatBRL(result.price)}</b></span> : <span>Mão de obra: <b>{formatBRL(result.laborCost)}</b></span>}
+            <span>Total do serviço: <b>{formatBRL(result.pricingMode === 'fixed' ? result.price : result.laborCost)}</b></span>
             <span className="sm:hidden">Total: <b>{formatBRL(result.price)}</b></span>
           </div>
-          {result.materials.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {result.materials.map((m) => (
-                <span key={m.productId} className="rounded-lg bg-white px-2 py-0.5 text-[11px] text-graphite-600 ring-1 ring-graphite-200 dark:bg-graphite-950 dark:text-graphite-300 dark:ring-white/10">
-                  {m.name}: <b className="tabular">{formatNumber(m.qty, 3)} {m.unit}</b>
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </Card>

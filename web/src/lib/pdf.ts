@@ -179,24 +179,18 @@ export async function buildQuotePdf(q: QuotePdfInput, client: ClientLike | null,
   const envRows: RowInput[] = [];
   q.calc.environments.forEach((r, i) => {
     const e = q.environments.find((x) => x.id === r.envId) ?? q.environments[i];
-    const dims =
-      r.measurementType === 'unit'
-        ? `${formatNumber(r.quantity, 2)} ${r.chargeUnit}`
-        : `${formatNumber(e?.width ?? 0, 2)} x ${formatNumber(e?.length ?? 0, 2)} m${e?.surface === 'walls' ? ` x ${formatNumber(e?.height ?? 0, 2)} m (paredes)` : ''}`;
     const measure = r.measurementType === 'm2' ? `${formatNumber(r.netArea, 2)} m²` : r.measurementType === 'ml' ? `${formatNumber(r.linear, 2)} m` : `${formatNumber(r.quantity, 2)} ${r.chargeUnit}`;
-    const ded = (e?.deductions ?? []).filter((d) => d.width > 0);
-    const dedText = ded.length ? `\nDescontos: ${ded.map((d) => `${d.label || 'vão'} ${formatNumber(d.width, 2)}x${formatNumber(d.length, 2)}${(d.quantity ?? 1) > 1 ? ` (${d.quantity}x)` : ''}`).join('; ')}` : '';
-    envRows.push([t(`${r.name}`), t(`${r.serviceName}`), t(`${dims}${dedText}`), t(measure), formatBRL(r.price)]);
+    envRows.push([t(`${r.name}`), t(`${r.serviceName}`), t(measure), formatBRL(r.price)]);
   });
   autoTable(doc, {
     startY: y,
-    head: [['Ambiente', 'Serviço', 'Medidas', 'Quantidade', 'Valor']],
+    head: [['Ambiente', 'Serviço', 'Medida total', 'Valor']],
     body: envRows,
     theme: 'grid',
     styles: { fontSize: 8.5, cellPadding: 2.2, lineColor: [230, 230, 235], textColor: [30, 32, 40] },
     headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontStyle: 'bold' },
     alternateRowStyles: { fillColor: [248, 249, 251] },
-    columnStyles: { 0: { cellWidth: 32 }, 1: { cellWidth: 42 }, 3: { cellWidth: 26, halign: 'right' }, 4: { cellWidth: 28, halign: 'right', fontStyle: 'bold' } },
+    columnStyles: { 2: { cellWidth: 32, halign: 'right' }, 3: { cellWidth: 30, halign: 'right', fontStyle: 'bold' } },
     margin: { left: 14, right: 14 },
   });
   y = lastY(doc) + 6;
@@ -205,26 +199,10 @@ export async function buildQuotePdf(q: QuotePdfInput, client: ClientLike | null,
   y = ensureSpace(doc, y, 12);
   doc.setFontSize(8.5);
   doc.setTextColor(...GRAY);
-  const meas = [q.calc.grossArea > 0 && `Área total ${formatNumber(q.calc.grossArea, 2)} m²`, q.calc.deductedArea > 0 && `Área descontada ${formatNumber(q.calc.deductedArea, 2)} m²`, q.calc.netArea > 0 && `Área líquida ${formatNumber(q.calc.netArea, 2)} m²`, q.calc.linearTotal > 0 && `Metro linear ${formatNumber(q.calc.linearTotal, 2)} m`, q.calc.plates > 0 && `${q.calc.plates} placas`].filter(Boolean).join('   |   ');
+  const meas = [q.calc.netArea > 0 && `Medida total ${formatNumber(q.calc.netArea, 2)} m²`, q.calc.linearTotal > 0 && `Metro linear ${formatNumber(q.calc.linearTotal, 2)} m`].filter(Boolean).join('   |   ');
   if (meas) doc.text(t(meas), 14, y);
   doc.setTextColor(30, 32, 40);
   y += 9;
-
-  if (q.calc.materials.length) {
-    y = ensureSpace(doc, y, 20);
-    y = sectionTitle(doc, y, 'Materiais previstos');
-    autoTable(doc, {
-      startY: y,
-      head: [['Material', 'Quantidade', 'Unidade']],
-      body: q.calc.materials.map((m) => [t(m.name), formatNumber(m.qty, 3), t(m.unit)]),
-      theme: 'striped',
-      styles: { fontSize: 8.5, cellPadding: 1.8 },
-      headStyles: { fillColor: [33, 52, 87], textColor: [255, 255, 255] },
-      columnStyles: { 1: { halign: 'right', cellWidth: 30 }, 2: { cellWidth: 24 } },
-      margin: { left: 14, right: 14 },
-    });
-    y = lastY(doc) + 6;
-  }
 
   // totais
   y = ensureSpace(doc, y, 34);

@@ -110,7 +110,7 @@ export default function Dashboard() {
     can('quotes', 'create') && { label: 'Novo orçamento', icon: <Calculator className="h-5 w-5" />, to: '/orcamentos/novo' },
     can('services', 'create') && { label: 'Novo serviço', icon: <Wrench className="h-5 w-5" />, to: '/servicos' },
     can('finance', 'create') && { label: 'Movimentação financeira', icon: <Receipt className="h-5 w-5" />, to: '/financeiro' },
-    can('jobs', 'create') && { label: 'Nova ordem de serviço', icon: <HardHat className="h-5 w-5" />, to: '/obras' },
+    can('jobs', 'create') && { label: 'Novo controle de material', icon: <HardHat className="h-5 w-5" />, to: '/obras' },
   ].filter(Boolean) as { label: string; icon: React.ReactNode; to: string }[];
 
   return (

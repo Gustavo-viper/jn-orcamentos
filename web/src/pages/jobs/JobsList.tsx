@@ -43,7 +43,7 @@ export default function JobsList() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader title="Obras e ordens de serviço" subtitle="Acompanhe a execução, a equipe e o consumo de materiais." actions={can('jobs', 'create') && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setNewOpen(true)}>Nova OS avulsa</Button>} />
+      <PageHeader title="Controle de material" subtitle="Controle interno do material de drywall por obra: previsto, consumido e saldo." actions={can('jobs', 'create') && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setNewOpen(true)}>Novo controle avulso</Button>} />
       <Tabs
         className="mb-3"
         value={status}
@@ -55,7 +55,7 @@ export default function JobsList() {
         <LoadingBlock />
       ) : !list.length ? (
         <Card>
-          <EmptyState icon={<HardHat className="h-6 w-6" />} title="Nenhuma obra nesta lista" description="As ordens de serviço são geradas a partir de orçamentos aprovados." />
+          <EmptyState icon={<HardHat className="h-6 w-6" />} title="Nenhum controle nesta lista" description="Os controles de material são gerados a partir de orçamentos aprovados." />
         </Card>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -113,13 +113,13 @@ function NewJobModal({ onClose, onCreated }: { onClose: () => void; onCreated: (
     const id = uuid();
     await saveRecord('jobs', id, { clientId, address, servicesSummary: summary, contractedValue: value, team, startDate: start || null, expectedEnd: end || null, notes }, 'Criar OS avulsa', { status: 'waiting', number: null, materials: [], quoteId: null, completedAt: null });
     await getDb().jobs.update(id, { status: 'waiting' });
-    toast('Ordem de serviço criada.');
+    toast('Controle de material criado.');
     onClose();
     onCreated(id);
   };
   return (
-    <Modal open onClose={onClose} title="Nova ordem de serviço avulsa" size="lg" footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={submit}>Criar OS</Button></>}>
-      <p className="mb-4 text-xs text-graphite-500">Para obras vindas de orçamento, use "Gerar ordem de serviço" no orçamento aprovado — os materiais e o valor são carregados automaticamente.</p>
+    <Modal open onClose={onClose} title="Novo controle de material avulso" size="lg" footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={submit}>Criar controle</Button></>}>
+      <p className="mb-4 text-xs text-graphite-500">Para obras vindas de orçamento, use "Gerar controle de material" no orçamento aprovado — os materiais e o valor são carregados automaticamente.</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field className="sm:col-span-2" label="Cliente" required>
           <Select value={clientId} onChange={(e) => {

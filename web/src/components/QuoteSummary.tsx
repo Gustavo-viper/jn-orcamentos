@@ -11,17 +11,15 @@ function Row({ label, value, strong, muted, className }: { label: string; value:
   );
 }
 
-/** Resumo automático do orçamento (medidas, materiais, custos, margem e condições). */
+/** Resumo automático do orçamento (medidas, custos, margem e condições). */
 export function QuoteSummary({ calc, internal = true }: { calc: QuoteTotals; internal?: boolean }) {
   return (
     <div>
       <div className="grid grid-cols-3 gap-2">
         {[
-          ['Área total', `${formatNumber(calc.grossArea, 2)} m²`],
-          ['Área descontada', `${formatNumber(calc.deductedArea, 2)} m²`],
-          ['Área líquida', `${formatNumber(calc.netArea, 2)} m²`],
+          ['Medida total', `${formatNumber(calc.netArea, 2)} m²`],
+          ['Descontos', `${formatNumber(calc.deductedArea, 2)} m²`],
           ['Metro linear', `${formatNumber(calc.linearTotal, 2)} m`],
-          ['Placas', `${calc.plates}`],
           ['Ambientes', `${calc.environments.length}`],
         ].map(([l, v]) => (
           <div key={l} className="rounded-xl bg-graphite-50 px-2.5 py-2 dark:bg-white/[0.04]">
@@ -31,28 +29,10 @@ export function QuoteSummary({ calc, internal = true }: { calc: QuoteTotals; int
         ))}
       </div>
 
-      {calc.materials.length > 0 && (
-        <details className="group mt-4" open={calc.materials.length <= 6}>
-          <summary className="cursor-pointer text-xs font-semibold tracking-wide text-graphite-500 uppercase select-none">Materiais necessários ({calc.materials.length})</summary>
-          <ul className="mt-2 space-y-1">
-            {calc.materials.map((m) => (
-              <li key={m.productId} className="flex items-baseline justify-between gap-2 text-sm">
-                <span className="min-w-0 truncate">{m.name}</span>
-                <span className="tabular shrink-0 text-right">
-                  {formatNumber(m.qty, 3)} {m.unit}
-                  {internal && <span className="ml-2 text-xs text-graphite-500">{formatBRL(m.cost)}</span>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-
       <div className="mt-4 border-t border-graphite-100 pt-3 dark:border-white/5">
         {internal && (
           <>
-            <Row label="Custo dos materiais" value={formatBRL(calc.materialCost)} />
-            <Row label="Custo da mão de obra" value={formatBRL(calc.laborCost)} />
+            <Row label="Total do serviço" value={formatBRL(calc.laborCost)} />
             {calc.fixedPriceTotal > 0 && <Row label="Serviços de preço fixo" value={formatBRL(calc.fixedPriceTotal)} />}
             <Row label="Custo total" value={formatBRL(calc.totalCost)} strong />
             <Row label={`Margem de lucro (${formatNumber(calc.marginPct, 2)}%)`} value={formatBRL(calc.marginAmount)} />

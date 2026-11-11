@@ -2,6 +2,7 @@
  * Camada de dados do aplicativo: grava localmente (funciona offline), enfileira
  * para sincronização e aplica efeitos otimistas. O servidor valida tudo novamente.
  */
+import { useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   DEFAULT_COMPANY,
@@ -101,11 +102,12 @@ export function useWhere<T extends keyof SyncTableMap>(table: T, index: string, 
 
 export function useCompany(): CompanySettings {
   const r = useLiveQuery(() => getDb().settings.get('company'), []);
-  return { ...DEFAULT_COMPANY, ...((r?.value as CompanySettings) ?? {}) };
+  // Memorizado: um objeto novo a cada render causava loop infinito nos painéis de configuração.
+  return useMemo(() => ({ ...DEFAULT_COMPANY, ...((r?.value as CompanySettings) ?? {}) }), [r]);
 }
 export function useQuoteSettings(): QuoteSettings {
   const r = useLiveQuery(() => getDb().settings.get('quote'), []);
-  return { ...DEFAULT_QUOTE_SETTINGS, ...((r?.value as QuoteSettings) ?? {}) };
+  return useMemo(() => ({ ...DEFAULT_QUOTE_SETTINGS, ...((r?.value as QuoteSettings) ?? {}) }), [r]);
 }
 
 export function usePendingOps() {
