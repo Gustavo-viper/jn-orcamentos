@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { getTableColumns, getTableName } from 'drizzle-orm';
+import { getTableColumns, getTableName, sql } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import * as s from '../db/schema.js';
 import { db, nextSeq, writeTx } from '../db/client.js';
@@ -46,9 +46,22 @@ export interface BackupFile {
   tables: Record<string, unknown[]>;
 }
 
+/**
+ * Lê só as colunas que já existem no banco. Assim o backup pré-migração funciona
+ * mesmo quando o código novo espera colunas que a migração ainda vai criar.
+ */
+async function selectExisting(t: PgTable): Promise<unknown[]> {
+  const name = getTableName(t);
+  const res = await db().execute(sql`select column_name from information_schema.columns where table_schema = current_schema() and table_name = ${name}`);
+  const existing = new Set((res.rows as { column_name: string }[]).map((r) => r.column_name));
+  const cols = Object.fromEntries(Object.entries(getTableColumns(t)).filter(([, c]) => existing.has(c.name) || existing.has(c.name.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase()))));
+  if (Object.keys(cols).length === 0) return [];
+  return db().select(cols).from(t);
+}
+
 export async function exportData(reason = 'exportacao'): Promise<BackupFile> {
   const tables: Record<string, unknown[]> = {};
-  for (const t of TABLES) tables[getTableName(t)] = await db().select().from(t);
+  for (const t of TABLES) tables[getTableName(t)] = await selectExisting(t);
   return { app: 'jn-orcamentos', format: 1, createdAt: new Date().toISOString(), reason, tables };
 }
 
