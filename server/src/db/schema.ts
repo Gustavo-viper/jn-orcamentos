@@ -183,6 +183,8 @@ export const services = pgTable(
     laborPrice: money().notNull().default(0),
     chargeUnit: text().notNull(),
     linearBasis: text({ enum: ['perimeter', 'width', 'length'] }).notNull().default('perimeter'),
+    /** adicionais/decorativos (ServiceAddon[]) */
+    addons: jsonb().notNull().default([]),
     active: boolean().notNull().default(true),
   },
   (t) => [index('services_seq_idx').on(t.seq)],
@@ -259,6 +261,7 @@ export const quoteItems = pgTable(
     linearOverride: doublePrecision(),
     quantity: doublePrecision(),
     deductions: jsonb().notNull().default([]),
+    addons: jsonb().notNull().default([]),
     grossArea: doublePrecision().notNull().default(0),
     netArea: doublePrecision().notNull().default(0),
     linear: doublePrecision().notNull().default(0),

@@ -103,6 +103,18 @@ export const serviceSchema = z.object({
     .max(50)
     .default([])
     .refine((arr) => new Set(arr.map((m) => m.productId)).size === arr.length, 'Material repetido no serviço'),
+  addons: z
+    .array(
+      z.object({
+        id: idSchema,
+        name: str(120).min(1, 'Informe o nome do adicional'),
+        measurementType: z.enum(['m2', 'ml', 'unit']),
+        chargeUnit: str(20).min(1),
+        laborPrice: money,
+      }),
+    )
+    .max(50)
+    .default([]),
 });
 
 export const deductionSchema = z.object({
@@ -111,6 +123,19 @@ export const deductionSchema = z.object({
   width: measure,
   length: measure,
   quantity: z.number().int().min(1).max(1000).default(1),
+});
+
+
+export const environmentAddonSchema = z.object({
+  id: idSchema,
+  addonId: idSchema.nullable().default(null),
+  name: str(120).min(1, 'Informe o nome do adicional'),
+  measurementType: z.enum(['m2', 'ml', 'unit']),
+  chargeUnit: str(20).min(1),
+  laborPrice: money,
+  width: measure.default(0),
+  length: measure.default(0),
+  quantity: z.number().min(0).max(100_000).nullable().default(null),
 });
 
 export const environmentSchema = z.object({
@@ -126,6 +151,7 @@ export const environmentSchema = z.object({
   linearOverride: measure.nullable().default(null),
   quantity: z.number().min(0).max(100_000).nullable().default(null),
   deductions: z.array(deductionSchema).max(100).default([]),
+  addons: z.array(environmentAddonSchema).max(50).default([]),
 });
 
 export const installmentSchema = z.object({ label: str(60).min(1), pct: z.number().min(0).max(100) });

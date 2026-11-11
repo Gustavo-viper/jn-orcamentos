@@ -10,10 +10,12 @@ import {
   type Client,
   type Deduction,
   type DiscountType,
+  type EnvironmentAddon,
   type EnvironmentInput,
   type EnvironmentResult,
   type Installment,
   type Quote,
+  type ServiceAddon,
   type Surface,
 } from '@jn/shared';
 import { getDb } from '../../lib/db';
@@ -87,7 +89,7 @@ export default function QuoteEditor() {
         const dup = dupId ? await getDb().quotes.get(dupId) : null;
         const today = todayISO();
         base = dup
-          ? { ...pickDoc(dup), issueDate: today, validUntil: addDaysISO(today, settings.validityDays), title: dup.title ? `${dup.title} (cópia)` : '', environments: dup.environments.map((e) => ({ ...structuredClone(e), id: uuid(), deductions: e.deductions.map((d) => ({ ...d, id: uuid() })) })) }
+          ? { ...pickDoc(dup), issueDate: today, validUntil: addDaysISO(today, settings.validityDays), title: dup.title ? `${dup.title} (cópia)` : '', environments: dup.environments.map((e) => ({ ...structuredClone(e), id: uuid(), deductions: e.deductions.map((d) => ({ ...d, id: uuid() })), addons: (e.addons ?? []).map((a) => ({ ...a, id: uuid() })) })) }
           : {
               clientId: params.get('cliente') ?? '',
               title: '',
@@ -131,8 +133,8 @@ export default function QuoteEditor() {
   const addEnv = (copyFrom?: EnvironmentInput) => {
     const svc = activeServices[0];
     const env: EnvironmentInput = copyFrom
-      ? { ...structuredClone(copyFrom), id: uuid(), name: `${copyFrom.name} (cópia)`, deductions: copyFrom.deductions.map((d) => ({ ...d, id: uuid() })) }
-      : { id: uuid(), name: `Ambiente ${doc.environments.length + 1}`, serviceId: svc?.id ?? '', width: 0, length: 0, height: 0, surface: 'floor', wastePct: settings.wastePct, laborPriceOverride: null, linearOverride: null, quantity: null, deductions: [] };
+      ? { ...structuredClone(copyFrom), id: uuid(), name: `${copyFrom.name} (cópia)`, deductions: copyFrom.deductions.map((d) => ({ ...d, id: uuid() })), addons: (copyFrom.addons ?? []).map((a) => ({ ...a, id: uuid() })) }
+      : { id: uuid(), name: `Ambiente ${doc.environments.length + 1}`, serviceId: svc?.id ?? '', width: 0, length: 0, height: 0, surface: 'floor', wastePct: settings.wastePct, laborPriceOverride: null, linearOverride: null, quantity: null, deductions: [], addons: [] };
     set('environments', [...doc.environments, env]);
   };
 
@@ -481,7 +483,7 @@ function EnvironmentCard({
   collapsed: boolean;
   onToggle: () => void;
   result: EnvironmentResult | undefined;
-  services: { id: string; name: string; measurementType: string; chargeUnit: string; laborPrice: number; pricingMode: string; active: boolean }[];
+  services: { id: string; name: string; measurementType: string; chargeUnit: string; laborPrice: number; pricingMode: string; active: boolean; addons?: ServiceAddon[] }[];
   onChange: (p: Partial<EnvironmentInput>) => void;
   onRemove: () => void;
   onDuplicate: () => void;
@@ -493,6 +495,18 @@ function EnvironmentCard({
   const isWall = type === 'm2' && (env.surface ?? 'floor') === 'walls';
   const [customLabor, setCustomLabor] = useState(env.laborPriceOverride != null);
   const setDed = (i: number, p: Partial<Deduction>) => onChange({ deductions: env.deductions.map((d, j) => (j === i ? { ...d, ...p } : d)) });
+  const envAddons = env.addons ?? [];
+  const setAddon = (i: number, p: Partial<EnvironmentAddon>) => onChange({ addons: envAddons.map((a, j) => (j === i ? { ...a, ...p } : a)) });
+  const addAddon = (a?: ServiceAddon) =>
+    onChange({
+      addons: [
+        ...envAddons,
+        a
+          ? { id: uuid(), addonId: a.id, name: a.name, measurementType: a.measurementType, chargeUnit: a.chargeUnit, laborPrice: a.laborPrice, width: 0, length: 0, quantity: a.measurementType === 'unit' ? 1 : null }
+          : { id: uuid(), addonId: null, name: '', measurementType: 'ml', chargeUnit: 'm', laborPrice: 0, width: 0, length: 0, quantity: null },
+      ],
+    });
+  const addonsLabor = (result?.addons ?? []).reduce((s, a) => s + a.laborCost, 0);
 
   return (
     <Card className="overflow-hidden">
@@ -605,6 +619,73 @@ function EnvironmentCard({
             )}
           </div>
         )}
+
+        {/* Adicionais / decorativos (tabica, elevação...) */}
+        {svc && (
+          <div className="sm:col-span-6">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <span className="text-sm font-medium">Adicionais / decorativos</span>
+                <span className="ml-2 text-xs text-graphite-500">Aparecem logo abaixo do serviço no orçamento e somam no total.</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {(svc.addons ?? []).map((a) => (
+                  <Button key={a.id} size="sm" variant="ghost" icon={<Plus className="h-4 w-4" />} onClick={() => addAddon(a)}>
+                    {a.name}
+                  </Button>
+                ))}
+                <Button size="sm" variant="ghost" icon={<Plus className="h-4 w-4" />} onClick={() => addAddon()}>
+                  {(svc.addons ?? []).length ? 'Outro' : 'Adicional'}
+                </Button>
+              </div>
+            </div>
+            {envAddons.length > 0 && (
+              <div className="space-y-2">
+                {envAddons.map((a, i) => {
+                  const ar = result?.addons.find((x) => x.id === a.id);
+                  return (
+                    <div key={a.id} className="grid grid-cols-2 gap-2 rounded-xl bg-graphite-50 p-2 sm:grid-cols-[1fr_90px_110px_110px_130px_auto] dark:bg-white/[0.03]">
+                      <Input className="col-span-2 sm:col-span-1" value={a.name} onChange={(e) => setAddon(i, { name: e.target.value })} placeholder="Tabica, elevação..." aria-label="Nome do adicional" />
+                      <Select
+                        value={a.measurementType}
+                        onChange={(e) => {
+                          const mt = e.target.value as EnvironmentAddon['measurementType'];
+                          setAddon(i, { measurementType: mt, chargeUnit: mt === 'm2' ? 'm²' : mt === 'ml' ? 'm' : 'un', quantity: mt === 'unit' ? (a.quantity ?? 1) : a.quantity });
+                        }}
+                        aria-label="Tipo de medida"
+                      >
+                        <option value="m2">m²</option>
+                        <option value="ml">m linear</option>
+                        <option value="unit">unidade</option>
+                      </Select>
+                      {a.measurementType === 'unit' ? (
+                        <NumberInput className="sm:col-span-2" value={a.quantity ?? 1} onChange={(v) => setAddon(i, { quantity: v ?? 0 })} decimals={2} min={0} suffix={a.chargeUnit || 'un'} aria-label="Quantidade" />
+                      ) : (
+                        <>
+                          {a.measurementType === 'm2' ? (
+                            <NumberInput value={a.width} onChange={(v) => setAddon(i, { width: v ?? 0 })} decimals={3} min={0} suffix="L" aria-label="Largura" />
+                          ) : (
+                            <span className="hidden sm:block" />
+                          )}
+                          <NumberInput value={a.length} onChange={(v) => setAddon(i, { length: v ?? 0 })} decimals={3} min={0} suffix="C" aria-label="Comprimento" />
+                        </>
+                      )}
+                      <MoneyInput value={a.laborPrice} onChange={(v) => setAddon(i, { laborPrice: v })} aria-label="Mão de obra por unidade" />
+                      <Button variant="ghost" size="icon" className="h-[42px]" onClick={() => onChange({ addons: envAddons.filter((_, j) => j !== i) })} aria-label="Remover adicional">
+                        <X className="h-4 w-4" />
+                      </Button>
+                      {ar && (
+                        <div className="tabular col-span-2 text-xs text-graphite-500 sm:col-span-6">
+                          {formatNumber(ar.measure, 2)} {a.chargeUnit} × {formatBRL(ar.laborPrice)} = <b>{formatBRL(result?.pricingMode === 'fixed' ? ar.price : ar.laborCost)}</b>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       )}
 
@@ -622,7 +703,11 @@ function EnvironmentCard({
             {type === 'unit' && <span>{svc.name} = <b>{formatNumber(result.quantity, 2)} {svc.chargeUnit}</b></span>}
             {type !== 'unit' && <span>Negativo: <b>{formatNumber(result.perimeter, 2)} m</b></span>}
             {result.plates > 0 && <span>Placas: <b>{result.plates}</b></span>}
-            <span>Total do serviço: <b>{formatBRL(result.pricingMode === 'fixed' ? result.price : result.laborCost)}</b></span>
+            <span>{result.addons.length ? 'Serviço principal' : 'Total do serviço'}: <b>{formatBRL(result.pricingMode === 'fixed' ? result.basePrice : result.laborCost - addonsLabor)}</b></span>
+            {result.addons.map((a) => (
+              <span key={a.id}>+ {a.name || 'Adicional'} ({formatNumber(a.measure, 2)} {a.chargeUnit}): <b>{formatBRL(result.pricingMode === 'fixed' ? a.price : a.laborCost)}</b></span>
+            ))}
+            {result.addons.length > 0 && <span>Total do serviço: <b>{formatBRL(result.pricingMode === 'fixed' ? result.price : result.laborCost)}</b></span>}
             <span className="sm:hidden">Total: <b>{formatBRL(result.price)}</b></span>
           </div>
         </div>

@@ -49,6 +49,49 @@ export interface CalcService {
   chargeUnit: string;
   linearBasis: LinearBasis;
   materials: CalcServiceMaterial[];
+  /** adicionais/decorativos disponíveis para o serviço (ex.: tabica, elevação no forro) */
+  addons?: ServiceAddon[];
+}
+
+/** Adicional cadastrado no serviço (modelo). */
+export interface ServiceAddon {
+  id: string;
+  name: string;
+  measurementType: MeasurementType;
+  chargeUnit: string;
+  /** mão de obra por unidade de medida (centavos) */
+  laborPrice: number;
+}
+
+/**
+ * Adicional aplicado a um ambiente do orçamento. Guarda uma cópia do nome, tipo e
+ * preço no momento da inclusão, para que o orçamento não mude se o cadastro mudar.
+ *  - m²: largura × comprimento
+ *  - ml: comprimento
+ *  - unidade: quantidade
+ */
+export interface EnvironmentAddon {
+  id: string;
+  addonId?: string | null;
+  name: string;
+  measurementType: MeasurementType;
+  chargeUnit: string;
+  laborPrice: number;
+  width: number;
+  length: number;
+  quantity?: number | null;
+}
+
+export interface AddonResult {
+  id: string;
+  name: string;
+  measurementType: MeasurementType;
+  chargeUnit: string;
+  measure: number;
+  laborPrice: number;
+  laborCost: number;
+  margin: number;
+  price: number;
 }
 
 export interface Deduction {
@@ -75,6 +118,8 @@ export interface EnvironmentInput {
   /** quantidade para serviços por unidade */
   quantity?: number | null;
   deductions: Deduction[];
+  /** adicionais/decorativos deste ambiente */
+  addons?: EnvironmentAddon[];
 }
 
 export interface Installment {
@@ -131,7 +176,12 @@ export interface EnvironmentResult {
   /** custo interno (materiais + mão de obra; em preço fixo, somente materiais) */
   cost: number;
   margin: number;
+  /** valor total do ambiente (serviço principal + adicionais) */
   price: number;
+  /** valor somente do serviço principal */
+  basePrice: number;
+  /** adicionais calculados (já incluídos em laborCost, cost, margin e price) */
+  addons: AddonResult[];
   plates: number;
   errors: string[];
 }
@@ -229,6 +279,8 @@ export function calculateEnvironment(
     cost: 0,
     margin: 0,
     price: 0,
+    basePrice: 0,
+    addons: [],
     plates: 0,
     errors,
   };
@@ -310,6 +362,41 @@ export function calculateEnvironment(
     margin = cents((eligible * nonNeg(marginPct)) / 100);
     price = cost + margin;
   }
+  const basePrice = price;
+
+  // Adicionais: seguem o mesmo modo de preço do serviço principal.
+  const addons: AddonResult[] = (env.addons ?? []).map((a) => {
+    const m = addonMeasure(a);
+    const lp = cents(nonNeg(a.laborPrice));
+    const value = cents(m * lp);
+    let aLabor = 0;
+    let aMargin = 0;
+    let aPrice = 0;
+    if (service.pricingMode === 'fixed') {
+      aPrice = value;
+    } else {
+      aLabor = value;
+      aMargin = marginOnLabor ? cents((value * nonNeg(marginPct)) / 100) : 0;
+      aPrice = aLabor + aMargin;
+    }
+    return {
+      id: a.id,
+      name: a.name,
+      measurementType: a.measurementType,
+      chargeUnit: a.chargeUnit,
+      measure: m,
+      laborPrice: lp,
+      laborCost: aLabor,
+      margin: aMargin,
+      price: aPrice,
+    };
+  });
+  for (const a of addons) {
+    laborCost += a.laborCost;
+    cost += a.laborCost;
+    margin += a.margin;
+    price += a.price;
+  }
 
   return {
     ...base,
@@ -328,8 +415,17 @@ export function calculateEnvironment(
     cost,
     margin,
     price,
+    basePrice,
+    addons,
     plates,
   };
+}
+
+/** Medida de um adicional: m² = largura × comprimento; ml = comprimento; unidade = quantidade. */
+export function addonMeasure(a: Pick<EnvironmentAddon, 'measurementType' | 'width' | 'length' | 'quantity'>): number {
+  if (a.measurementType === 'm2') return area(a.width, a.length);
+  if (a.measurementType === 'ml') return roundTo(nonNeg(a.length), 4);
+  return a.quantity != null ? nonNeg(a.quantity) : 1;
 }
 
 /** Agrupa linhas de materiais pelo produto (somando quantidades e custos). */

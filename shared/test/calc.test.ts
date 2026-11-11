@@ -269,3 +269,37 @@ describe('documentos, permissões e situações', () => {
     expect(addDaysISO('2026-01-30', 15)).toBe('2026-02-14');
   });
 });
+
+describe('adicionais do serviço', () => {
+  const tabica = { id: 'ad-1', addonId: 'tab', name: 'Tabica', measurementType: 'ml' as const, chargeUnit: 'm', laborPrice: 1000, width: 0, length: 18 };
+  const elevacao = { id: 'ad-2', addonId: 'ele', name: 'Elevação', measurementType: 'm2' as const, chargeUnit: 'm²', laborPrice: 2000, width: 2, length: 3 };
+  const pendente = { id: 'ad-3', name: 'Pendente', measurementType: 'unit' as const, chargeUnit: 'un', laborPrice: 1500, width: 0, length: 0, quantity: 2 };
+
+  it('soma adicionais (custo + margem) ao ambiente', () => {
+    const semAd = calculateQuote(quote({ environments: [env({})] }), services, products).environments[0]!;
+    const r = calculateQuote(quote({ environments: [env({ addons: [tabica, elevacao, pendente] })] }), services, products);
+    const e = r.environments[0]!;
+    expect(e.addons.map((a) => a.measure)).toEqual([18, 6, 2]);
+    expect(e.addons.map((a) => a.laborCost)).toEqual([18000, 12000, 3000]);
+    // margem de 30% sobre a mão de obra dos adicionais
+    expect(e.addons.map((a) => a.price)).toEqual([23400, 15600, 3900]);
+    expect(e.basePrice).toBe(semAd.price);
+    expect(e.price).toBe(semAd.price + 23400 + 15600 + 3900);
+    expect(e.laborCost).toBe(semAd.laborCost + 33000);
+    expect(r.subtotal).toBe(e.price);
+  });
+
+  it('sem margem sobre mão de obra, adicional não recebe margem', () => {
+    const e = calculateQuote(quote({ marginOnLabor: false, environments: [env({ addons: [tabica] })] }), services, products).environments[0]!;
+    expect(e.addons[0]!.price).toBe(18000);
+    expect(e.addons[0]!.margin).toBe(0);
+  });
+
+  it('em serviço de preço fixo, adicional é preço final', () => {
+    const e = calculateQuote(quote({ environments: [env({ serviceId: 'serv-spot', quantity: 1, addons: [tabica] })] }), services, products).environments[0]!;
+    expect(e.basePrice).toBe(5000);
+    expect(e.addons[0]!.price).toBe(18000);
+    expect(e.price).toBe(23000);
+    expect(e.laborCost).toBe(0);
+  });
+});

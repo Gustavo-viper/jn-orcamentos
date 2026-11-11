@@ -39,6 +39,7 @@ export async function loadCatalog(tx: Tx, serviceIds: string[]) {
       laborPrice: x.laborPrice,
       chargeUnit: x.chargeUnit,
       linearBasis: x.linearBasis,
+      addons: (x.addons ?? []) as CalcService['addons'],
       materials: mats
         .filter((m) => m.serviceId === x.id)
         .sort((a, b) => a.position - b.position)
@@ -169,6 +170,11 @@ export async function saveQuote(ctx: Ctx, id: string, data: Record<string, unkno
           linearOverride: e.linearOverride,
           quantity: e.quantity,
           deductions: e.deductions,
+          // snapshot do adicional + resultado calculado (medida/valor) para exibir no PDF/portal
+          addons: (e.addons ?? []).map((a) => {
+            const ar = r.addons.find((x) => x.id === a.id);
+            return { ...a, measure: ar?.measure ?? 0, laborCost: ar?.laborCost ?? 0, price: ar?.price ?? 0 };
+          }),
           grossArea: r.grossArea,
           netArea: r.netArea,
           linear: r.linear,

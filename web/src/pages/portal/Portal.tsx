@@ -111,12 +111,14 @@ export default function Portal() {
       {quote.status === 'refused' && <Notice tone="red" icon={<XCircle className="h-5 w-5" />}>Orçamento recusado {quote.decidedAt && `em ${fmtDateTime(quote.decidedAt)}`}.</Notice>}
       {quote.status === 'expired' && <Notice tone="amber">A validade deste orçamento expirou. Fale com a J&N para receber uma proposta atualizada.</Notice>}
 
+      <div className="relative">
+      <Watermark src={company.logo || '/logo-jn.webp'} />
       <div className="card mb-5 overflow-hidden">
         <div className="border-b border-graphite-100 px-5 py-3 text-sm font-semibold">Serviços</div>
         <ul className="divide-y divide-graphite-100">
           {c.environments.map((e, i) => {
             return (
-              <li key={i} className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-center">
+              <li key={i} className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center">
                 <div className="flex-1">
                   <div className="font-medium">{e.name}</div>
                   <div className="text-xs text-graphite-500">
@@ -124,7 +126,16 @@ export default function Portal() {
                     {e.measurementType === 'm2' ? `${formatNumber(e.netArea, 2)} m²` : e.measurementType === 'ml' ? `${formatNumber(e.linear, 2)} m lineares` : `${formatNumber(e.quantity, 2)} ${e.chargeUnit}`}
                   </div>
                 </div>
-                <div className="tabular font-semibold">{formatBRL(e.price)}</div>
+                <div className="tabular font-semibold">{formatBRL(e.addons?.length ? (e.basePrice ?? e.price) : e.price)}</div>
+                {(e.addons ?? []).map((a) => (
+                  <div key={a.id} className="flex w-full items-center gap-2 pl-4 text-sm text-graphite-600 sm:basis-full">
+                    <span className="flex-1">+ {a.name} · <span className="text-xs text-graphite-500">{formatNumber(a.measure, 2)} {a.chargeUnit}</span></span>
+                    <span className="tabular">{formatBRL(a.price)}</span>
+                  </div>
+                ))}
+                {(e.addons?.length ?? 0) > 0 && (
+                  <div className="flex w-full justify-between pl-4 text-sm font-semibold sm:basis-full"><span>Total {e.name}</span><span className="tabular">{formatBRL(e.price)}</span></div>
+                )}
               </li>
             );
           })}
@@ -146,6 +157,7 @@ export default function Portal() {
           <div className="mb-2 text-sm font-semibold">Observações</div>
           <p className="text-sm whitespace-pre-wrap text-graphite-600">{quote.notes || '—'}</p>
         </div>
+      </div>
       </div>
 
       <div className="card mb-5 p-5">
@@ -179,6 +191,17 @@ export default function Portal() {
         <p className="mt-2 text-xs text-graphite-500">A data, a hora e a identificação deste acesso serão registradas.</p>
       </Modal>
     </Shell>
+  );
+}
+
+/** Logo da empresa como marca d'água (papel timbrado) sobre a "folha" do orçamento.
+ * Fica por cima dos cartões (que são translúcidos) com opacidade baixa e sem capturar cliques/seleção. */
+function Watermark({ src }: { src?: string }) {
+  if (!src) return null;
+  return (
+    <div aria-hidden className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center overflow-hidden select-none print:flex">
+      <img src={src} alt="" draggable={false} className="w-[85%] max-w-[560px] max-h-[80%] object-contain opacity-[0.06]" />
+    </div>
   );
 }
 

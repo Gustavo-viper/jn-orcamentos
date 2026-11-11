@@ -236,8 +236,19 @@ export default function QuoteView() {
                         {r.measurementType === 'ml' && <Info label={r.serviceName} value={`${formatNumber(r.linear, 2)} m`} />}
                         {r.measurementType === 'unit' && <Info label={r.serviceName} value={`${formatNumber(r.quantity, 2)} ${r.chargeUnit}`} />}
                         {r.measurementType !== 'unit' && <Info label="Negativo" value={`${formatNumber(r.perimeter, 2)} m`} />}
-                        <Info label="Total do serviço" value={formatBRL(r.pricingMode === 'fixed' ? r.price : r.laborCost)} />
+                        <Info label={(r.addons ?? []).length ? 'Serviço principal' : 'Total do serviço'} value={formatBRL(r.pricingMode === 'fixed' ? (r.basePrice ?? r.price) : r.laborCost - (r.addons ?? []).reduce((s, a) => s + a.laborCost, 0))} />
                       </div>
+                      {(r.addons ?? []).length > 0 && (
+                        <div className="space-y-1 border-t border-graphite-100 px-4 py-3 text-sm dark:border-white/5">
+                          <div className="text-xs font-medium uppercase tracking-wide text-graphite-500">Adicionais</div>
+                          {r.addons.map((a) => (
+                            <div key={a.id} className="tabular flex justify-between gap-3 pl-3">
+                              <span>+ {a.name} <span className="text-xs text-graphite-500">({formatNumber(a.measure, 2)} {a.chargeUnit} × {formatBRL(a.laborPrice)})</span></span>
+                              <b>{formatBRL(r.pricingMode === 'fixed' ? a.price : a.laborCost)}</b>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </Card>
                   );
                 })

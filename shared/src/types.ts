@@ -10,6 +10,7 @@ import type {
   MeasurementType,
   PricingMode,
   QuoteTotals,
+  ServiceAddon,
 } from './calc.js';
 
 export interface BaseRecord {
@@ -135,6 +136,8 @@ export interface Service extends BaseRecord {
   chargeUnit: string;
   linearBasis: LinearBasis;
   materials: ServiceMaterial[];
+  /** adicionais/decorativos do serviço */
+  addons?: ServiceAddon[];
   active: boolean;
 }
 

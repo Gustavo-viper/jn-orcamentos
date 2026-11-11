@@ -10,6 +10,7 @@ import {
   type MeasurementType,
   type PricingMode,
   type Service,
+  type ServiceAddon,
   type ServiceMaterial,
 } from '@jn/shared';
 import { deleteRecord, saveRecord, useTable } from '../../lib/data';
@@ -22,7 +23,7 @@ import { Badge, Button, Card, confirmDialog, EmptyState, Field, Input, LoadingBl
 
 type Form = Omit<Service, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'version' | 'seq'>;
 const UNIT_FOR: Record<MeasurementType, string> = { m2: 'm²', ml: 'm', unit: 'un' };
-const EMPTY: Form = { name: '', description: '', measurementType: 'm2', pricingMode: 'cost_plus', laborPrice: 0, chargeUnit: 'm²', linearBasis: 'perimeter', materials: [], active: true };
+const EMPTY: Form = { name: '', description: '', measurementType: 'm2', pricingMode: 'cost_plus', laborPrice: 0, chargeUnit: 'm²', linearBasis: 'perimeter', materials: [], addons: [], active: true };
 
 export default function Services() {
   const services = useTable('services');
@@ -102,16 +103,19 @@ function ServiceModal({ service, onClose }: { service: Service | null; onClose: 
   const readOnly = service ? !can('services', 'edit') : !can('services', 'create');
 
   useEffect(() => {
-    setF(service ? { name: service.name, description: service.description, measurementType: service.measurementType, pricingMode: service.pricingMode, laborPrice: service.laborPrice, chargeUnit: service.chargeUnit, linearBasis: service.linearBasis, materials: service.materials.map((m) => ({ ...m })), active: service.active } : EMPTY);
+    setF(service ? { name: service.name, description: service.description, measurementType: service.measurementType, pricingMode: service.pricingMode, laborPrice: service.laborPrice, chargeUnit: service.chargeUnit, linearBasis: service.linearBasis, materials: service.materials.map((m) => ({ ...m })), addons: (service.addons ?? []).map((a) => ({ ...a })), active: service.active } : EMPTY);
   }, [service]);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => ({ ...p, [k]: v }));
   const activeProducts = (products ?? []).filter((p) => p.active || f.materials.some((m) => m.productId === p.id)).sort((a, b) => a.name.localeCompare(b.name));
+  const addons = f.addons ?? [];
+  const setAddon = (i: number, patch: Partial<ServiceAddon>) => set('addons', addons.map((a, j) => (j === i ? { ...a, ...patch } : a)));
   const setMat = (i: number, patch: Partial<ServiceMaterial>) => set('materials', f.materials.map((m, j) => (j === i ? { ...m, ...patch } : m)));
 
   const submit = async () => {
     const parsed = serviceSchema.safeParse(f);
     if (!parsed.success) return setErrors(fieldErrors(parsed.error));
+    if (addons.some((a) => !a.name.trim())) return setErrors({ addons: 'Informe o nome de cada adicional.' });
     if (f.materials.some((m) => !m.productId)) return setErrors({ materials: 'Selecione o produto de cada material.' });
     setBusy(true);
     try {
@@ -164,7 +168,7 @@ function ServiceModal({ service, onClose }: { service: Service | null; onClose: 
     >
       {service && <Tabs className="mb-4" value={tab} onChange={setTab} tabs={[{ value: 'data', label: 'Dados' }, { value: 'history', label: <span className="inline-flex items-center gap-1.5"><History className="h-3.5 w-3.5" /> Histórico</span> }]} />}
       {tab === 'history' && service ? (
-        <ChangeHistory entity="services" id={service.id} labels={{ name: 'Nome', laborPrice: 'Preço (centavos)', measurementType: 'Medição', pricingMode: 'Precificação', active: 'Ativo', materials: 'Materiais', chargeUnit: 'Unidade' }} />
+        <ChangeHistory entity="services" id={service.id} labels={{ name: 'Nome', laborPrice: 'Preço (centavos)', measurementType: 'Medição', pricingMode: 'Precificação', active: 'Ativo', materials: 'Materiais', addons: 'Adicionais', chargeUnit: 'Unidade' }} />
       ) : (
         <fieldset disabled={readOnly} className="grid grid-cols-1 gap-4 sm:grid-cols-6">
           <Field className="sm:col-span-4" label="Nome do serviço" required error={errors.name}>
@@ -254,6 +258,37 @@ function ServiceModal({ service, onClose }: { service: Service | null; onClose: 
                   </div>
                 );
               })}
+            </div>
+          </div>
+          <div className="sm:col-span-6">
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-semibold">Adicionais / decorativos</div>
+                <div className="text-xs text-graphite-500">Ex.: tabica, elevação, sanca. Aparecem abaixo do serviço no orçamento, com medida e mão de obra próprias.</div>
+              </div>
+              <Button size="sm" variant="outline" icon={<Plus className="h-4 w-4" />} onClick={() => set('addons', [...addons, { id: uuid(), name: '', measurementType: 'ml', chargeUnit: 'm', laborPrice: 0 }])}>
+                Adicional
+              </Button>
+            </div>
+            {errors.addons && <p className="mb-2 text-xs text-red-600">{errors.addons}</p>}
+            <div className="space-y-2">
+              {addons.map((a, i) => (
+                <div key={a.id} className="grid grid-cols-2 items-start gap-2 rounded-xl bg-graphite-50 p-2 sm:grid-cols-[1fr_140px_80px_140px_auto] dark:bg-white/[0.03]">
+                  <Input className="col-span-2 sm:col-span-1" value={a.name} onChange={(e) => setAddon(i, { name: e.target.value })} placeholder="Nome (ex.: Tabica)" aria-label="Nome do adicional" />
+                  <Select value={a.measurementType} onChange={(e) => setAddon(i, { measurementType: e.target.value as MeasurementType, chargeUnit: UNIT_FOR[e.target.value as MeasurementType] })} aria-label="Tipo de medição do adicional">
+                    {Object.entries(MEASUREMENT_LABEL).map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input value={a.chargeUnit} onChange={(e) => setAddon(i, { chargeUnit: e.target.value })} aria-label="Unidade do adicional" />
+                  <MoneyInput value={a.laborPrice} onChange={(v) => setAddon(i, { laborPrice: v })} aria-label="Mão de obra do adicional" />
+                  <Button variant="ghost" size="icon" className="h-[42px]" onClick={() => set('addons', addons.filter((_, j) => j !== i))} aria-label="Remover adicional">
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+              ))}
             </div>
           </div>
         </fieldset>

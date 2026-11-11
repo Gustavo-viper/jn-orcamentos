@@ -69,6 +69,8 @@ export async function portalView(token: string, ip: string, userAgent: string) {
         environments: calc.environments.map((e) => ({
           envId: e.envId, name: e.name, serviceName: e.serviceName, measurementType: e.measurementType, chargeUnit: e.chargeUnit,
           grossArea: e.grossArea, deductedArea: e.deductedArea, netArea: e.netArea, perimeter: e.perimeter, linear: e.linear, quantity: e.quantity, measure: e.measure, price: e.price,
+          basePrice: e.basePrice ?? e.price,
+          addons: (e.addons ?? []).map((a) => ({ id: a.id, name: a.name, measurementType: a.measurementType, chargeUnit: a.chargeUnit, measure: a.measure, price: a.price })),
           materials: e.materials.map((m) => ({ productId: m.productId, name: m.name, unit: m.unit, qty: m.qty })),
         })),
         materials: calc.materials.map((m) => ({ productId: m.productId, name: m.name, unit: m.unit, qty: m.qty })),

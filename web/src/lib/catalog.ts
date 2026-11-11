@@ -3,7 +3,7 @@ import type { CalcProduct, CalcService, Product, Service } from '@jn/shared';
 import { useTable } from './data';
 
 export function toCalcService(s: Service): CalcService {
-  return { id: s.id, name: s.name, measurementType: s.measurementType, pricingMode: s.pricingMode, laborPrice: s.laborPrice, chargeUnit: s.chargeUnit, linearBasis: s.linearBasis, materials: s.materials };
+  return { id: s.id, name: s.name, measurementType: s.measurementType, pricingMode: s.pricingMode, laborPrice: s.laborPrice, chargeUnit: s.chargeUnit, linearBasis: s.linearBasis, materials: s.materials, addons: s.addons ?? [] };
 }
 export function toCalcProduct(p: Product): CalcProduct {
   return { id: p.id, name: p.name, unit: p.unit, category: p.category, unitCost: p.unitCost, plateArea: p.plateArea, indivisible: p.indivisible };

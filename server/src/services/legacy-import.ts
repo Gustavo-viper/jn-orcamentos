@@ -240,7 +240,7 @@ export async function importLegacy(records: LegacyRecord[], opts: { dryRun: bool
           envResults.push({
             envId, name: environments[environments.length - 1].name, serviceId: svcId, serviceName: str(it.serviceName, 200), measurementType: linear ? 'ml' : 'm2', pricingMode: fixed ? 'fixed' : 'cost_plus', chargeUnit: str(it.unitLabel, 20) || (linear ? 'm' : 'm²'),
             grossArea: num(it.area), deductedArea: num(it.negativeArea), netArea: linear ? 0 : measure, perimeter: num(it.perimeter), linear: linear ? measure : 0, deductedLinear: num(it.negativePerimeter), quantity: 0, measure,
-            wastePct: num(it.wastePercent), laborPrice: cents(it.laborUnitPrice), laborCost: fixed ? 0 : laborCost, materials, materialCost, cost: fixed ? materialCost : materialCost + laborCost, margin: fixed ? 0 : price - materialCost - laborCost, price,
+            wastePct: num(it.wastePercent), laborPrice: cents(it.laborUnitPrice), laborCost: fixed ? 0 : laborCost, materials, materialCost, cost: fixed ? materialCost : materialCost + laborCost, margin: fixed ? 0 : price - materialCost - laborCost, price, basePrice: price, addons: [],
             plates: num((it.plateInfo as { quantity?: number } | undefined)?.quantity), errors: [],
           });
         }

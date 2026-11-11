@@ -2,7 +2,7 @@
  * Documentos PDF gerados no próprio aparelho (funciona offline).
  * Fonte padrão Helvetica (WinAnsi) — caracteres fora do Latin-1 são normalizados.
  */
-import { jsPDF } from 'jspdf';
+import { GState, jsPDF } from 'jspdf';
 import autoTable, { type RowInput } from 'jspdf-autotable';
 import {
   formatBRL,
@@ -100,6 +100,35 @@ async function header(doc: jsPDF, company: CompanySettings, title: string, subti
   doc.setTextColor(30, 32, 40);
 }
 
+/** Logo da empresa como marca d'água (papel timbrado), centralizada e bem clara, em todas as páginas. */
+async function watermark(doc: jsPDF, company: CompanySettings) {
+  const logo = company.logo || (await loadDefaultLogo());
+  if (!logo) return;
+  try {
+    const W = doc.internal.pageSize.getWidth();
+    const H = doc.internal.pageSize.getHeight();
+    const props = doc.getImageProperties(logo);
+    const ratio = props.width / props.height || 1;
+    let w = W * 0.7;
+    let h = w / ratio;
+    if (h > H * 0.5) {
+      h = H * 0.5;
+      w = h * ratio;
+    }
+    const x = (W - w) / 2;
+    const y = (H - h) / 2 + 10;
+    for (let i = 1; i <= doc.getNumberOfPages(); i++) {
+      doc.setPage(i);
+      doc.saveGraphicsState();
+      doc.setGState(new GState({ opacity: 0.06 }));
+      doc.addImage(logo, imgFormat(logo), x, y, w, h, 'jn-watermark');
+      doc.restoreGraphicsState();
+    }
+  } catch {
+    /* logotipo inválido: segue sem marca d'água */
+  }
+}
+
 function footer(doc: jsPDF, company: CompanySettings) {
   const pages = doc.getNumberOfPages();
   const W = doc.internal.pageSize.getWidth();
@@ -180,7 +209,12 @@ export async function buildQuotePdf(q: QuotePdfInput, client: ClientLike | null,
   q.calc.environments.forEach((r, i) => {
     const e = q.environments.find((x) => x.id === r.envId) ?? q.environments[i];
     const measure = r.measurementType === 'm2' ? `${formatNumber(r.netArea, 2)} m²` : r.measurementType === 'ml' ? `${formatNumber(r.linear, 2)} m` : `${formatNumber(r.quantity, 2)} ${r.chargeUnit}`;
-    envRows.push([t(`${r.name}`), t(`${r.serviceName}`), t(measure), formatBRL(r.price)]);
+    const addons = r.addons ?? [];
+    envRows.push([t(`${r.name}`), t(`${r.serviceName}`), t(measure), formatBRL(addons.length ? (r.basePrice ?? r.price) : r.price)]);
+    for (const a of addons) {
+      envRows.push(['', t(`   + ${a.name}`), t(`${formatNumber(a.measure, 2)} ${a.chargeUnit}`), formatBRL(a.price)]);
+    }
+    if (addons.length) envRows.push([{ content: t(`Total ${r.name}`), colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } }, { content: formatBRL(r.price), styles: { fontStyle: 'bold' } }]);
   });
   autoTable(doc, {
     startY: y,
@@ -277,6 +311,7 @@ export async function buildQuotePdf(q: QuotePdfInput, client: ClientLike | null,
   doc.text(t(`De acordo - ${client?.name ?? 'Cliente'}`), W - 53, y + 4.5, { align: 'center' });
   doc.text('Data: ____/____/________', W - 53, y + 9.5, { align: 'center' });
 
+  await watermark(doc, company);
   footer(doc, company);
   return doc;
 }

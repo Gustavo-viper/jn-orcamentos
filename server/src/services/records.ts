@@ -89,6 +89,7 @@ export async function loadRecords(tx: Executor, t: SyncTable, ids: string[]): Pr
               linearOverride: i.linearOverride,
               quantity: i.quantity,
               deductions: i.deductions as EnvironmentInput['deductions'],
+              addons: (i.addons ?? []) as EnvironmentInput['addons'],
             }),
           ),
       }),
