@@ -98,8 +98,8 @@ const fromQuoteSchema = z.object({
 });
 
 /**
- * Controle de material: só entra material de acartonado (drywall).
- * Soma os materiais dos ambientes de acartonado e, quando o serviço não tem
+ * Controle de material: só entram as placas de acartonado (drywall).
+ * Soma as placas dos ambientes de acartonado e, quando o serviço não tem
  * produto-placa vinculado, usa o produto de placa cadastrado (1,80 x 1,20) para as placas calculadas.
  */
 async function drywallMaterials(tx: Tx, calc: QuoteTotals): Promise<JobMaterial[]> {
@@ -112,7 +112,7 @@ async function drywallMaterials(tx: Tx, calc: QuoteTotals): Promise<JobMaterial[
   };
   let uncoveredPlates = 0;
   for (const e of envs) {
-    for (const m of e.materials ?? []) add(m.productId, m.name, m.unit, m.qty);
+    for (const m of e.materials ?? []) if (m.isPlate) add(m.productId, m.name, m.unit, m.qty);
     if ((e.plates ?? 0) > 0 && !(e.materials ?? []).some((m) => m.isPlate)) uncoveredPlates += e.plates;
   }
   if (uncoveredPlates > 0) {

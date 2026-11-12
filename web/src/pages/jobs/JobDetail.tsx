@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarClock, CheckCircle2, MessageSquarePlus, Package, Pause, Pencil, Play, Plus, Trash2, X, XCircle } from 'lucide-react';
-import { JOB_EVENT_LABEL, JOB_TRANSITIONS, formatJobNumber, formatQuoteNumber, roundTo, todayISO, type Job, type JobMaterial, type JobStatus } from '@jn/shared';
+import { JOB_EVENT_LABEL, JOB_TRANSITIONS, formatJobNumber, formatQuoteNumber, isPlate, roundTo, todayISO, type Job, type JobMaterial, type JobStatus } from '@jn/shared';
 import { getDb } from '../../lib/db';
 import { deleteRecord, runCommand, saveRecord, useRecord, useTable, useWhere } from '../../lib/data';
 import { useAuth } from '../../lib/auth';
@@ -31,6 +31,7 @@ export default function JobDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
+  const plates = useMemo(() => (products ?? []).filter(isPlate), [products]);
   const timeline = useMemo(() => [...(events ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [events]);
 
   if (job === undefined) return <LoadingBlock />;
@@ -38,6 +39,7 @@ export default function JobDetail() {
   const canEdit = can('jobs', 'edit');
   const closed = job.status === 'completed' || job.status === 'cancelled';
   const allowed = JOB_TRANSITIONS[job.status];
+  const plateMats = job.materials.filter((m) => plates.some((p) => p.id === m.productId));
 
   const optimisticEvent = async (type: keyof typeof JOB_EVENT_LABEL, text: string, statusTo: JobStatus | null, eventId: string) => {
     const now = new Date().toISOString();
@@ -130,20 +132,20 @@ export default function JobDetail() {
 
         <div className="min-w-0 space-y-5">
           <Card>
-            <CardHeader title="Material de drywall" subtitle="Previsto × consumido (uso interno)" icon={<Package className="h-4 w-4" />} action={canEdit && !closed && <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setConsumeOpen(true)}>Registrar consumo</Button>} />
-            {job.materials.length ? (
+            <CardHeader title="Placas acartonado" subtitle="Previsto × consumido (baixa no estoque de placas)" icon={<Package className="h-4 w-4" />} action={canEdit && !closed && <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setConsumeOpen(true)}>Registrar consumo</Button>} />
+            {plateMats.length ? (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[480px]">
                   <thead>
                     <tr className="border-b border-graphite-100 dark:border-white/5">
-                      <th className="th">Material</th>
+                      <th className="th">Placa</th>
                       <th className="th text-right">Previsto</th>
                       <th className="th text-right">Consumido</th>
                       <th className="th text-right">Diferença</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-graphite-100 dark:divide-white/5">
-                    {job.materials.map((m) => {
+                    {plateMats.map((m) => {
                       const diff = roundTo(m.consumedQty - m.plannedQty, 3);
                       return (
                         <tr key={m.productId}>
@@ -158,7 +160,7 @@ export default function JobDetail() {
                 </table>
               </div>
             ) : (
-              <p className="p-5 text-sm text-graphite-500">Nenhum material previsto.</p>
+              <p className="p-5 text-sm text-graphite-500">Nenhuma placa prevista.</p>
             )}
           </Card>
 
@@ -192,8 +194,8 @@ export default function JobDetail() {
         </div>
       </div>
 
-      {consumeOpen && <ConsumeModal job={job} products={products ?? []} mode="consume" onClose={() => setConsumeOpen(false)} />}
-      {completeOpen && <ConsumeModal job={job} products={products ?? []} mode="complete" onClose={() => setCompleteOpen(false)} />}
+      {consumeOpen && <ConsumeModal job={job} products={plates} mode="consume" onClose={() => setConsumeOpen(false)} />}
+      {completeOpen && <ConsumeModal job={job} products={plates} mode="complete" onClose={() => setCompleteOpen(false)} />}
       {editOpen && <EditJobModal job={job} onClose={() => setEditOpen(false)} />}
       {pauseOpen && <PauseModal onClose={() => setPauseOpen(false)} onConfirm={(n) => changeStatus('paused', { note: n })} />}
       {scheduleOpen && <ScheduleModal onClose={() => setScheduleOpen(false)} onConfirm={(d) => changeStatus('scheduled', { date: d, note: `Início agendado para ${fmtDate(d)}` })} />}
@@ -250,8 +252,9 @@ function EditJobModal({ job, onClose }: { job: Job; onClose: () => void }) {
 function ConsumeModal({ job, products, mode, onClose }: { job: Job; products: { id: string; name: string; unit: string; quantity: number; active: boolean }[]; mode: 'consume' | 'complete'; onClose: () => void }) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const plateMats = job.materials.filter((m) => products.some((p) => p.id === m.productId));
   const remaining = (m: JobMaterial) => Math.max(0, roundTo(m.plannedQty - m.consumedQty, 3));
-  const [lines, setLines] = useState<Line[]>(() => (mode === 'complete' ? job.materials.filter((m) => remaining(m) > 0).map((m) => ({ productId: m.productId, quantity: remaining(m) })) : [{ productId: job.materials[0]?.productId ?? '', quantity: null }]));
+  const [lines, setLines] = useState<Line[]>(() => (mode === 'complete' ? plateMats.filter((m) => remaining(m) > 0).map((m) => ({ productId: m.productId, quantity: remaining(m) })) : [{ productId: plateMats[0]?.productId ?? products.find((p) => p.active)?.id ?? '', quantity: null }]));
   const [completedAt, setCompletedAt] = useState(todayISO());
   const [note, setNote] = useState('');
   const [allowNeg, setAllowNeg] = useState(false);
@@ -261,7 +264,7 @@ function ConsumeModal({ job, products, mode, onClose }: { job: Job; products: { 
   const shortages = valid.filter((l) => (prodMap.get(l.productId)?.quantity ?? 0) < (l.quantity ?? 0));
 
   const submit = async () => {
-    if (mode === 'consume' && !valid.length) return toast.error('Informe ao menos um material e quantidade.');
+    if (mode === 'consume' && !valid.length) return toast.error('Informe ao menos uma placa e a quantidade.');
     if (shortages.length && !(isAdmin && allowNeg)) return toast.error(`Estoque insuficiente: ${shortages.map((s) => prodMap.get(s.productId)?.name).join(', ')}.`);
     setBusy(true);
     const payloadLines = valid.map((l) => ({ productId: l.productId, movementId: uuid(), quantity: l.quantity!, allowNegative: allowNeg }));
@@ -295,10 +298,10 @@ function ConsumeModal({ job, products, mode, onClose }: { job: Job; products: { 
     onClose();
   };
 
-  const options = [...job.materials.map((m) => ({ id: m.productId, label: `${m.name} (previsto ${formatNumber(m.plannedQty, 3)} ${m.unit})` })), ...products.filter((p) => p.active && !job.materials.some((m) => m.productId === p.id)).map((p) => ({ id: p.id, label: p.name }))];
+  const options = [...plateMats.map((m) => ({ id: m.productId, label: `${m.name} (previsto ${formatNumber(m.plannedQty, 3)} ${m.unit})` })), ...products.filter((p) => p.active && !plateMats.some((m) => m.productId === p.id)).map((p) => ({ id: p.id, label: p.name }))];
 
   return (
-    <Modal open onClose={onClose} size="lg" title={mode === 'complete' ? 'Concluir obra' : 'Registrar consumo de materiais'} closeOnBackdrop={false} footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button variant={mode === 'complete' ? 'gold' : 'primary'} loading={busy} onClick={submit}>{mode === 'complete' ? 'Concluir obra' : 'Registrar consumo'}</Button></>}>
+    <Modal open onClose={onClose} size="lg" title={mode === 'complete' ? 'Concluir obra' : 'Registrar consumo de placas'} closeOnBackdrop={false} footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button variant={mode === 'complete' ? 'gold' : 'primary'} loading={busy} onClick={submit}>{mode === 'complete' ? 'Concluir obra' : 'Registrar consumo'}</Button></>}>
       {mode === 'complete' && (
         <div className="mb-4 grid gap-4 sm:grid-cols-2">
           <Field label="Data de conclusão"><Input type="date" value={completedAt} onChange={(e) => setCompletedAt(e.target.value)} /></Field>
@@ -313,7 +316,7 @@ function ConsumeModal({ job, products, mode, onClose }: { job: Job; products: { 
             <div key={i} className="grid grid-cols-[1fr_140px_auto] items-start gap-2">
               <div>
                 <Select value={l.productId} onChange={(e) => setLines(lines.map((x, j) => (j === i ? { ...x, productId: e.target.value } : x)))}>
-                  <option value="">Selecione o material</option>
+                  <option value="">Selecione a placa</option>
                   {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                 </Select>
                 {p && <div className={`mt-1 text-[11px] ${p.quantity < (l.quantity ?? 0) ? 'text-red-600' : 'text-graphite-500'}`}>Em estoque: {formatNumber(p.quantity, 3)} {p.unit}</div>}
@@ -324,11 +327,11 @@ function ConsumeModal({ job, products, mode, onClose }: { job: Job; products: { 
           );
         })}
       </div>
-      <Button className="mt-3" size="sm" variant="ghost" icon={<Plus className="h-4 w-4" />} onClick={() => setLines([...lines, { productId: '', quantity: null }])}>Adicionar material</Button>
+      <Button className="mt-3" size="sm" variant="ghost" icon={<Plus className="h-4 w-4" />} onClick={() => setLines([...lines, { productId: '', quantity: null }])}>Adicionar placa</Button>
       {shortages.length > 0 && (
         <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300">
           Estoque insuficiente para: {shortages.map((s) => prodMap.get(s.productId)?.name).join(', ')}.
-          {isAdmin ? <div className="mt-2"><Checkbox checked={allowNeg} onChange={setAllowNeg} label="Autorizo estoque negativo (administrador)" /></div> : <div className="mt-1 text-xs">Registre a entrada no estoque ou peça autorização ao administrador.</div>}
+          {isAdmin ? <div className="mt-2"><Checkbox checked={allowNeg} onChange={setAllowNeg} label="Autorizo estoque negativo (administrador)" /></div> : <div className="mt-1 text-xs">Registre a entrada no quadro "Estoque de placas" em Controle de material ou peça autorização ao administrador.</div>}
         </div>
       )}
     </Modal>

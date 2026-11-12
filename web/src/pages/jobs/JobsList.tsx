@@ -1,19 +1,22 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { HardHat, Plus } from 'lucide-react';
-import { formatJobNumber, todayISO } from '@jn/shared';
+import { HardHat, Layers, PackagePlus, Plus, SlidersHorizontal } from 'lucide-react';
+import { DRYWALL_PLATE_AREA, formatJobNumber, isPlate, todayISO, type Product, type StockMovementType } from '@jn/shared';
 import { getDb } from '../../lib/db';
 import { saveRecord, useTable } from '../../lib/data';
 import { useAuth } from '../../lib/auth';
 import { uuid } from '../../lib/ids';
-import { fmtDate, formatBRL, normalize } from '../../lib/format';
+import { fmtDate, formatBRL, formatNumber, normalize } from '../../lib/format';
+import { StockMoveModal } from '../../components/StockMoveModal';
 import { JobStatusBadge } from '../../lib/status';
 import { Button, Card, EmptyState, Field, Input, LoadingBlock, LoadMore, Modal, MoneyInput, PageHeader, SearchInput, Select, Textarea, toast, usePaged } from '../../components/ui';
 
 export default function JobsList() {
   const jobs = useTable('jobs');
   const clients = useTable('clients');
+  const products = useTable('products');
   const { can } = useAuth();
+  const plateIds = useMemo(() => new Set((products ?? []).filter(isPlate).map((p) => p.id)), [products]);
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [newOpen, setNewOpen] = useState(false);
@@ -31,7 +34,8 @@ export default function JobsList() {
 
   return (
     <div className="animate-fade-in">
-      <PageHeader title="Controle de material" subtitle="Controle interno do material de drywall por obra: previsto, consumido e saldo." actions={can('jobs', 'create') && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setNewOpen(true)}>Novo controle avulso</Button>} />
+      <PageHeader title="Controle de material" subtitle="Estoque de placas acartonado e consumo de placas por obra: previsto, consumido e saldo." actions={can('jobs', 'create') && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setNewOpen(true)}>Novo controle avulso</Button>} />
+      <PlateStockCard products={products} />
       <SearchInput className="mb-4 sm:w-96" value={q} onChange={setQ} placeholder="Número, cliente, endereço ou equipe" />
       {!list ? (
         <LoadingBlock />
@@ -43,7 +47,8 @@ export default function JobsList() {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((j) => {
             const late = j.expectedEnd && j.expectedEnd < today && !['completed', 'cancelled'].includes(j.status);
-            const progress = j.materials.length ? Math.min(100, Math.round((j.materials.reduce((s, m) => s + Math.min(m.consumedQty, m.plannedQty || m.consumedQty), 0) / Math.max(1, j.materials.reduce((s, m) => s + (m.plannedQty || 0), 0))) * 100)) : 0;
+            const plates = j.materials.filter((m) => plateIds.has(m.productId));
+            const progress = plates.length ? Math.min(100, Math.round((plates.reduce((s, m) => s + Math.min(m.consumedQty, m.plannedQty || m.consumedQty), 0) / Math.max(1, plates.reduce((s, m) => s + (m.plannedQty || 0), 0))) * 100)) : 0;
             return (
               <Link key={j.id} to={`/obras/${j.id}`} className="card block p-5 transition hover:-translate-y-0.5 hover:shadow-lg">
                 <div className="flex items-start justify-between gap-2">
@@ -61,12 +66,12 @@ export default function JobsList() {
                   </div>
                   <div className="tabular text-base font-semibold">{formatBRL(j.contractedValue)}</div>
                 </div>
-                {j.materials.length > 0 && (
+                {plates.length > 0 && (
                   <div className="mt-3">
                     <div className="h-1.5 overflow-hidden rounded-full bg-graphite-100 dark:bg-white/10">
                       <div className="h-full rounded-full bg-gradient-to-r from-gold-300 to-gold-500" style={{ width: `${progress}%` }} />
                     </div>
-                    <div className="mt-1 text-[11px] text-graphite-500">Materiais consumidos: {progress}% do previsto</div>
+                    <div className="mt-1 text-[11px] text-graphite-500">Placas consumidas: {progress}% do previsto</div>
                   </div>
                 )}
               </Link>
@@ -77,6 +82,67 @@ export default function JobsList() {
       <LoadMore more={more} onClick={loadMore} shown={visible.length} total={total} />
       {newOpen && <NewJobModal onClose={() => setNewOpen(false)} onCreated={(id) => navigate(`/obras/${id}`)} />}
     </div>
+  );
+}
+
+function PlateStockCard({ products }: { products: Product[] | undefined }) {
+  const { can } = useAuth();
+  const [sel, setSel] = useState<{ product: Product; type: StockMovementType } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const canEdit = can('products', 'edit');
+  const plates = (products ?? []).filter((p) => isPlate(p) && p.active && !p.deletedAt).sort((a, b) => a.name.localeCompare(b.name));
+  const current = sel ? plates.find((p) => p.id === sel.product.id) ?? sel.product : null;
+
+  const createPlate = async () => {
+    setBusy(true);
+    try {
+      await saveRecord('products', uuid(), { code: '', name: 'Placa acartonado 1,80 × 1,20', category: 'placas', unit: 'un', unitCost: 0, plateArea: DRYWALL_PLATE_AREA, dimensions: '1,80 × 1,20', description: '', supplier: '', minStock: 0, indivisible: true, active: true, quantity: 0 }, 'Cadastrar placa acartonado');
+      toast('Placa cadastrada. Registre a entrada do estoque.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="mb-5 p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <Layers className="h-5 w-5 text-gold-500" />
+        <h2 className="font-semibold">Estoque de placas acartonado (1,80 × 1,20)</h2>
+      </div>
+      {!products ? (
+        <LoadingBlock />
+      ) : !plates.length ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-graphite-500">
+          <span>Nenhuma placa cadastrada no estoque.</span>
+          {can('products', 'create') && <Button size="sm" icon={<Plus className="h-4 w-4" />} loading={busy} onClick={createPlate}>Cadastrar placa 1,80 × 1,20</Button>}
+        </div>
+      ) : (
+        <div className="divide-y divide-graphite-100 dark:divide-white/10">
+          {plates.map((p) => {
+            const low = p.quantity <= (p.minStock || 0);
+            return (
+              <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{p.name}</div>
+                  <div className={`tabular text-2xl font-semibold ${p.quantity < 0 ? 'text-red-600' : low ? 'text-amber-600' : ''}`}>
+                    {formatNumber(p.quantity, 3)} <span className="text-sm font-normal text-graphite-500">{p.unit}</span>
+                  </div>
+                  {low && <div className="text-xs text-amber-600">{p.quantity < 0 ? 'Estoque negativo' : 'Estoque baixo'}</div>}
+                </div>
+                {canEdit && (
+                  <div className="flex gap-2">
+                    <Button size="sm" icon={<PackagePlus className="h-4 w-4" />} onClick={() => setSel({ product: p, type: 'in' })}>Entrada</Button>
+                    <Button size="sm" variant="outline" icon={<SlidersHorizontal className="h-4 w-4" />} onClick={() => setSel({ product: p, type: 'adjust' })}>Ajuste</Button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-3 text-xs text-graphite-500">As placas consumidas nas obras são baixadas automaticamente deste estoque.</p>
+      <StockMoveModal product={current} open={!!sel} onClose={() => setSel(null)} initialType={sel?.type ?? 'in'} types={['in', 'adjust']} />
+    </Card>
   );
 }
 

@@ -29,7 +29,9 @@ export async function moveStockCommand(p: { product: Product; type: StockMovemen
   return { delta, balance };
 }
 
-export function StockMoveModal({ product, open, onClose, initialType = 'in' }: { product: Product | null; open: boolean; onClose: () => void; initialType?: StockMovementType }) {
+const ALL_TYPES: StockMovementType[] = ['in', 'out', 'adjust'];
+
+export function StockMoveModal({ product, open, onClose, initialType = 'in', types = ALL_TYPES }: { product: Product | null; open: boolean; onClose: () => void; initialType?: StockMovementType; types?: StockMovementType[] }) {
   const { user } = useAuth();
   const [type, setType] = useState<StockMovementType>(initialType);
   const [qty, setQty] = useState<number | null>(null);
@@ -86,7 +88,7 @@ export function StockMoveModal({ product, open, onClose, initialType = 'in' }: {
         </>
       }
     >
-      <Tabs className="mb-4" value={type} onChange={setType} tabs={[{ value: 'in', label: 'Entrada' }, { value: 'out', label: 'Saída' }, { value: 'adjust', label: 'Ajuste' }]} />
+      <Tabs className="mb-4" value={type} onChange={setType} tabs={types.map((t) => ({ value: t, label: STOCK_MOVEMENT_LABEL[t] }))} />
       <div className="space-y-4">
         <div className="rounded-xl bg-graphite-50 p-3 text-sm dark:bg-white/[0.03]">
           Saldo atual: <b className="tabular">{formatNumber(product.quantity, 3)} {product.unit}</b>
