@@ -245,6 +245,17 @@ export default function QuoteView() {
             <Button variant="outline" size="icon" onClick={print} aria-label="Imprimir" title="Imprimir" disabled={!calc}>
               <Printer className="h-4 w-4" />
             </Button>
+            <Button
+              variant="outline"
+              icon={<Link2 className="h-4 w-4 text-sky-600" />}
+              onClick={() => {
+                setTab('portal');
+                document.getElementById('quote-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              title="Link para o cliente ver, aprovar ou recusar o orçamento"
+            >
+              Portal do cliente
+            </Button>
             <Button variant="outline" icon={<MessageCircle className="h-4 w-4 text-emerald-600" />} onClick={shareWhatsApp} disabled={!calc || status === 'draft'}>
               WhatsApp
             </Button>
@@ -302,6 +313,7 @@ export default function QuoteView() {
 
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <div className="min-w-0">
+          <div id="quote-tabs" className="scroll-mt-4" />
           <Tabs className="mb-3" value={tab} onChange={setTab} tabs={[{ value: 'detail', label: 'Detalhes' }, { value: 'portal', label: 'Portal do cliente', count: (events ?? []).filter((e) => e.type !== 'viewed').length }, { value: 'history', label: 'Histórico' }]} />
           {tab === 'detail' && (
             <div className="space-y-4">
