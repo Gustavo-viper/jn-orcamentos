@@ -125,7 +125,7 @@ export default function QuoteView() {
   };
 
   const remove = async () => {
-    if (!(await confirmDialog({ title: 'Excluir orçamento', message: <>Excluir o orçamento <b>{formatQuoteNumber(quote.number)}</b>? Orçamentos com ordem de serviço ou lançamentos financeiros não podem ser excluídos.</>, danger: true, confirmLabel: 'Excluir' }))) return;
+    if (!(await confirmDialog({ title: 'Excluir orçamento', message: <>Excluir o orçamento <b>{formatQuoteNumber(quote.number)}</b>? O controle de material e os lançamentos em aberto ligados a ele também serão excluídos.</>, danger: true, confirmLabel: 'Excluir' }))) return;
     await deleteRecord('quotes', quote.id, `Excluir orçamento ${formatQuoteNumber(quote.number)}`);
     toast('Exclusão enviada.');
     navigate('/orcamentos');

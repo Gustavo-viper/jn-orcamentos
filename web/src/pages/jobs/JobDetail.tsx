@@ -67,7 +67,7 @@ export default function JobDetail() {
   };
 
   const remove = async () => {
-    if (!(await confirmDialog({ title: 'Excluir OS', message: 'Somente OS aguardando ou canceladas, sem consumo de materiais, podem ser excluídas.', danger: true, confirmLabel: 'Excluir' }))) return;
+    if (!(await confirmDialog({ title: 'Excluir controle', message: 'Excluir este controle de material? Ele some da lista (o histórico de estoque é mantido).', danger: true, confirmLabel: 'Excluir' }))) return;
     await deleteRecord('jobs', job.id, `Excluir ${formatJobNumber(job.number)}`);
     navigate('/obras');
   };
@@ -81,7 +81,7 @@ export default function JobDetail() {
         actions={
           <>
             {canEdit && !closed && <Button variant="outline" icon={<Pencil className="h-4 w-4" />} onClick={() => setEditOpen(true)}>Editar</Button>}
-            {can('jobs', 'delete') && ['waiting', 'cancelled'].includes(job.status) && <Button variant="ghost" size="icon" onClick={remove} aria-label="Excluir"><Trash2 className="h-4 w-4 text-red-500" /></Button>}
+            {can('jobs', 'delete') && <Button variant="ghost" size="icon" onClick={remove} aria-label="Excluir"><Trash2 className="h-4 w-4 text-red-500" /></Button>}
           </>
         }
       />

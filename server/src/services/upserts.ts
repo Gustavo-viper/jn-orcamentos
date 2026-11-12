@@ -159,10 +159,6 @@ const DEFS: Partial<Record<UpsertTable, Def>> = {
       }
       touch(ctx, 'jobEvents', ev.id);
     },
-    canDelete: async (_ctx, _id, existing) => {
-      if (!['waiting', 'cancelled'].includes(String(existing.status))) throw conflict('Somente OS aguardando ou canceladas podem ser excluídas.');
-      if (((existing.materials as { consumedQty: number }[]) ?? []).some((m) => m.consumedQty > 0)) throw conflict('Esta OS possui consumo de materiais registrado.');
-    },
   },
   financeEntries: {
     module: 'finance',
@@ -254,6 +250,15 @@ export async function upsertRecord(ctx: Ctx, table: UpsertTable, id: string, dat
   if (table === 'clientNotes') touch(ctx, 'clients', String(values.clientId));
 }
 
+async function softDelete(ctx: Ctx, table: 'jobs' | 'financeEntries', id: string, msg: string) {
+  const pg = SYNC_PG[table].table;
+  const before = await loadOne(ctx.tx, table, id);
+  await ctx.tx.update(pg).set({ deletedAt: new Date(), ...bump(pg) }).where(eq(pg.id, id));
+  await logChange(ctx.tx, ctx.actor, table, id, 'delete', before, null);
+  await logActivity(ctx.tx, ctx.actor, `${table}.delete`, table, id, msg);
+  touch(ctx, table, id);
+}
+
 export async function deleteRecord(ctx: Ctx, table: UpsertTable, id: string) {
   if (table === 'settings') throw badRequest('Configurações não podem ser excluídas.');
   const pg = SYNC_PG[table].table;
@@ -262,10 +267,11 @@ export async function deleteRecord(ctx: Ctx, table: UpsertTable, id: string) {
   if (existing.deletedAt) return touch(ctx, table, id); // idempotente
   if (table === 'quotes') {
     requirePerm(ctx, 'quotes', 'delete');
-    const [job] = await ctx.tx.select({ id: s.jobs.id }).from(s.jobs).where(and(eq(s.jobs.quoteId, id), isNull(s.jobs.deletedAt), ne(s.jobs.status, 'cancelled'))).limit(1);
-    if (job) throw conflict('Este orçamento possui ordem de serviço ativa e não pode ser excluído.');
-    const [fin] = await ctx.tx.select({ id: s.financeEntries.id }).from(s.financeEntries).where(and(eq(s.financeEntries.quoteId, id), isNull(s.financeEntries.deletedAt), ne(s.financeEntries.status, 'cancelled'))).limit(1);
-    if (fin) throw conflict('Este orçamento possui lançamentos financeiros. Cancele-os antes de excluir.');
+    // exclusão em cascata: controles de material e lançamentos em aberto do orçamento
+    const jobs = await ctx.tx.select({ id: s.jobs.id }).from(s.jobs).where(and(eq(s.jobs.quoteId, id), isNull(s.jobs.deletedAt)));
+    for (const j of jobs) await softDelete(ctx, 'jobs', j.id, 'Controle de material excluído junto com o orçamento');
+    const fins = await ctx.tx.select({ id: s.financeEntries.id }).from(s.financeEntries).where(and(eq(s.financeEntries.quoteId, id), isNull(s.financeEntries.deletedAt), sql`${s.financeEntries.paidAmount} = 0`));
+    for (const f of fins) await softDelete(ctx, 'financeEntries', f.id, 'Lançamento em aberto excluído junto com o orçamento');
   } else {
     const def = DEFS[table]!;
     requirePerm(ctx, def.module, 'delete');

@@ -1,55 +1,37 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { HardHat, Plus } from 'lucide-react';
-import { JOB_STATUS_LABEL, formatJobNumber, todayISO, type JobStatus } from '@jn/shared';
+import { formatJobNumber, todayISO } from '@jn/shared';
 import { getDb } from '../../lib/db';
 import { saveRecord, useTable } from '../../lib/data';
 import { useAuth } from '../../lib/auth';
 import { uuid } from '../../lib/ids';
 import { fmtDate, formatBRL, normalize } from '../../lib/format';
 import { JobStatusBadge } from '../../lib/status';
-import { Button, Card, EmptyState, Field, Input, LoadingBlock, LoadMore, Modal, MoneyInput, PageHeader, SearchInput, Select, Tabs, Textarea, toast, usePaged } from '../../components/ui';
+import { Button, Card, EmptyState, Field, Input, LoadingBlock, LoadMore, Modal, MoneyInput, PageHeader, SearchInput, Select, Textarea, toast, usePaged } from '../../components/ui';
 
 export default function JobsList() {
   const jobs = useTable('jobs');
   const clients = useTable('clients');
   const { can } = useAuth();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<JobStatus | 'all' | 'open'>('open');
   const [q, setQ] = useState('');
   const [newOpen, setNewOpen] = useState(false);
   const clientMap = useMemo(() => new Map((clients ?? []).map((c) => [c.id, c])), [clients]);
-
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: 0, open: 0 };
-    (jobs ?? []).forEach((j) => {
-      c.all++;
-      c[j.status] = (c[j.status] ?? 0) + 1;
-      if (!['completed', 'cancelled'].includes(j.status)) c.open++;
-    });
-    return c;
-  }, [jobs]);
 
   const list = useMemo(() => {
     if (!jobs) return undefined;
     const t = normalize(q);
     return jobs
-      .filter((j) => (status === 'all' ? true : status === 'open' ? !['completed', 'cancelled'].includes(j.status) : j.status === status))
       .filter((j) => !t || normalize(`${formatJobNumber(j.number)} ${clientMap.get(j.clientId)?.name ?? ''} ${j.address} ${j.team}`).includes(t))
       .sort((a, b) => (a.startDate ?? '9999').localeCompare(b.startDate ?? '9999') || b.createdAt.localeCompare(a.createdAt));
-  }, [jobs, status, q, clientMap]);
+  }, [jobs, q, clientMap]);
   const { visible, more, loadMore, total } = usePaged(list);
   const today = todayISO();
 
   return (
     <div className="animate-fade-in">
       <PageHeader title="Controle de material" subtitle="Controle interno do material de drywall por obra: previsto, consumido e saldo." actions={can('jobs', 'create') && <Button icon={<Plus className="h-4 w-4" />} onClick={() => setNewOpen(true)}>Novo controle avulso</Button>} />
-      <Tabs
-        className="mb-3"
-        value={status}
-        onChange={setStatus}
-        tabs={[{ value: 'open' as const, label: 'Em aberto', count: counts.open }, ...(['waiting', 'scheduled', 'in_progress', 'paused', 'completed', 'cancelled'] as const).map((s) => ({ value: s, label: JOB_STATUS_LABEL[s], count: counts[s] ?? 0 })), { value: 'all' as const, label: 'Todas', count: counts.all }]}
-      />
       <SearchInput className="mb-4 sm:w-96" value={q} onChange={setQ} placeholder="Número, cliente, endereço ou equipe" />
       {!list ? (
         <LoadingBlock />
