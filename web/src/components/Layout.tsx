@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
-  Boxes,
   Calculator,
   ClipboardList,
   CloudOff,
@@ -49,7 +48,6 @@ const NAV: NavItem[] = [
   { to: '/obras', label: 'Controle de material', icon: <HardHat className="h-[18px] w-[18px]" />, module: 'jobs' },
   { to: '/financeiro', label: 'Financeiro', icon: <Wallet className="h-[18px] w-[18px]" />, module: 'finance' },
   { to: '/servicos', label: 'Serviços', icon: <Wrench className="h-[18px] w-[18px]" />, module: 'services' },
-  { to: '/estoque', label: 'Produtos e estoque', icon: <Boxes className="h-[18px] w-[18px]" />, module: 'products' },
   { to: '/relatorios', label: 'Relatórios', icon: <BarChart3 className="h-[18px] w-[18px]" />, module: 'reports' },
   { to: '/configuracoes', label: 'Configurações', icon: <Settings className="h-[18px] w-[18px]" />, module: null },
 ];
