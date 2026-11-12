@@ -1,13 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Activity as ActivityIcon,
   ArrowDownCircle,
   Calculator,
-  CheckCircle2,
   Clock,
-  FileText,
   HardHat,
+  Hourglass,
   PiggyBank,
   Plus,
   Receipt,
@@ -16,16 +15,15 @@ import {
   Users,
   Wallet,
   Wrench,
-  XCircle,
-  Hourglass,
-  CircleDollarSign,
 } from 'lucide-react';
-import { JOB_STATUS_LABEL, QUOTE_STATUS_LABEL, quoteDisplayStatus, todayISO } from '@jn/shared';
+import { QUOTE_STATUS_LABEL, quoteDisplayStatus, todayISO } from '@jn/shared';
 import { useTable } from '../lib/data';
 import { useAuth } from '../lib/auth';
 import { formatBRL, isoToLocalDate, relativeTime } from '../lib/format';
-import { BarsChart, ChartFrame, LinesChart, lastMonths, monthLabel } from '../components/Charts';
-import { Card, CardHeader, EmptyState, LoadingBlock, PageHeader, StatCard } from '../components/ui';
+import { BarsChart, lastMonths, monthLabel } from '../components/Charts';
+import { Card, EmptyState, LoadingBlock } from '../components/ui';
+
+const STATUS_KEYS = ['draft', 'pending', 'approved', 'refused', 'expired'] as const;
 
 export default function Dashboard() {
   const { user, can } = useAuth();
@@ -58,19 +56,7 @@ export default function Dashboard() {
     const toReceive = ents.filter((e) => e.kind === 'in' && e.status === 'pending').reduce((s, e) => s + e.amount - e.paidAmount, 0);
     const expenses = ents.filter((e) => e.kind === 'out').reduce((s, e) => s + e.amount, 0);
     const estimatedProfit = approved.reduce((s, q) => s + (q.calc?.estimatedProfit ?? 0), 0);
-
     const months = lastMonths(12);
-    const byMonth = (pick: (ym: string) => number) => months.map((m) => pick(m));
-    const salesMonth = byMonth((m) => approved.filter((q) => isoToLocalDate(q.decidedAt ?? q.updatedAt).startsWith(m)).reduce((s, q) => s + q.total, 0));
-    const inMonth = byMonth((m) => (payments ?? []).filter((p) => entMap.get(p.entryId)?.kind === 'in' && isoToLocalDate(p.paidAt).startsWith(m)).reduce((s, p) => s + p.amount, 0));
-    const outMonth = byMonth((m) => (payments ?? []).filter((p) => entMap.get(p.entryId)?.kind === 'out' && isoToLocalDate(p.paidAt).startsWith(m)).reduce((s, p) => s + p.amount, 0));
-    let acc = 0;
-    const revenueEvolution = months.map((m, i) => ({ label: monthLabel(m), acumulado: (acc += inMonth[i]) }));
-
-    const svcTotals = new Map<string, number>();
-    approved.forEach((q) => q.calc?.environments.forEach((e) => svcTotals.set(e.serviceName, (svcTotals.get(e.serviceName) ?? 0) + e.price)));
-    const cityCount = new Map<string, number>();
-    clients.forEach((c) => cityCount.set(c.city || 'Não informada', (cityCount.get(c.city || 'Não informada') ?? 0) + 1));
 
     return {
       clients: clients.length,
@@ -78,8 +64,6 @@ export default function Dashboard() {
       quotes: qs.length,
       pending: qs.filter((q) => q.ds === 'pending').length,
       approved: approved.length,
-      refused: qs.filter((q) => q.ds === 'refused').length,
-      expired: qs.filter((q) => q.ds === 'expired').length,
       jobsRunning: jobs.filter((j) => j.status === 'in_progress').length,
       jobsDone: jobs.filter((j) => j.status === 'completed').length,
       sold,
@@ -88,122 +72,209 @@ export default function Dashboard() {
       expenses,
       estimatedProfit,
       balance: received - spentPaid,
-      salesChart: months.map((m, i) => ({ label: monthLabel(m), vendas: salesMonth[i] })),
-      cashChart: months.slice(-6).map((m, i) => ({ label: monthLabel(m), entradas: inMonth[i + 6], saidas: outMonth[i + 6] })),
-      revenueEvolution,
-      statusChart: (['draft', 'pending', 'approved', 'refused', 'expired'] as const).map((s) => ({ label: QUOTE_STATUS_LABEL[s], total: qs.filter((q) => q.ds === s).length })),
-      servicesChart: [...svcTotals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, valor]) => ({ label, valor })),
-      citiesChart: [...cityCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 7).map(([label, clientes]) => ({ label, clientes })),
-      jobsChart: (['waiting', 'scheduled', 'in_progress', 'paused', 'completed', 'cancelled'] as const).map((s) => ({ label: JOB_STATUS_LABEL[s], obras: jobs.filter((j) => j.status === s).length })),
+      salesChart: months.map((m) => ({
+        label: monthLabel(m),
+        vendas: approved.filter((q) => isoToLocalDate(q.decidedAt ?? q.updatedAt).startsWith(m)).reduce((s, q) => s + q.total, 0),
+      })),
+      statusChart: STATUS_KEYS.map((k) => ({ key: k, label: QUOTE_STATUS_LABEL[k], total: qs.filter((q) => q.ds === k).length })),
     };
   }, [clients, quotes, jobs, entries, payments]);
 
-  const recent = useMemo(() => [...(activities ?? [])].filter((a) => !a.action.startsWith('auth.')).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 12), [activities]);
+  const recent = useMemo(() => [...(activities ?? [])].filter((a) => !a.action.startsWith('auth.')).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5), [activities]);
 
   if (!d) return <LoadingBlock />;
   const first = !d.clients && !d.quotes && !(services ?? []).length;
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite';
+  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const quick = [
-    can('clients', 'create') && { label: 'Novo cliente', icon: <UserPlus className="h-5 w-5" />, to: '/clientes?novo=1' },
-    can('quotes', 'create') && { label: 'Novo orçamento', icon: <Calculator className="h-5 w-5" />, to: '/orcamentos/novo' },
-    can('services', 'create') && { label: 'Novo serviço', icon: <Wrench className="h-5 w-5" />, to: '/servicos' },
-    can('finance', 'create') && { label: 'Movimentação financeira', icon: <Receipt className="h-5 w-5" />, to: '/financeiro' },
-    can('jobs', 'create') && { label: 'Novo controle de material', icon: <HardHat className="h-5 w-5" />, to: '/obras' },
-  ].filter(Boolean) as { label: string; icon: React.ReactNode; to: string }[];
+    can('quotes', 'create') && { label: 'Orçamento', icon: <Calculator className="h-4 w-4" />, to: '/orcamentos/novo', primary: true },
+    can('clients', 'create') && { label: 'Cliente', icon: <UserPlus className="h-4 w-4" />, to: '/clientes?novo=1' },
+    can('services', 'create') && { label: 'Serviço', icon: <Wrench className="h-4 w-4" />, to: '/servicos' },
+    can('finance', 'create') && { label: 'Financeiro', icon: <Receipt className="h-4 w-4" />, to: '/financeiro' },
+    can('jobs', 'create') && { label: 'Material', icon: <HardHat className="h-4 w-4" />, to: '/obras' },
+  ].filter(Boolean) as { label: string; icon: ReactNode; to: string; primary?: boolean }[];
+
+  const tiles: TileProps[] = showFin
+    ? [
+        { label: 'Total vendido', value: formatBRL(d.sold), hint: `${d.approved} orçamentos aprovados`, icon: <TrendingUp className="h-4 w-4" />, tone: 'navy', to: '/orcamentos' },
+        { label: 'Recebido', value: formatBRL(d.received), hint: `Lucro estimado ${formatBRL(d.estimatedProfit)}`, icon: <ArrowDownCircle className="h-4 w-4" />, tone: 'green', to: '/financeiro' },
+        { label: 'A receber', value: formatBRL(d.toReceive), hint: `Despesas ${formatBRL(d.expenses)}`, icon: <Hourglass className="h-4 w-4" />, tone: 'amber', to: '/financeiro' },
+        { label: 'Saldo em caixa', value: formatBRL(d.balance), hint: 'Recebido − pago', icon: <Wallet className="h-4 w-4" />, tone: 'gold', to: '/financeiro' },
+      ]
+    : [
+        { label: 'Total vendido', value: formatBRL(d.sold), hint: `${d.approved} orçamentos aprovados`, icon: <TrendingUp className="h-4 w-4" />, tone: 'navy', to: '/orcamentos' },
+        { label: 'Lucro estimado', value: formatBRL(d.estimatedProfit), hint: 'Sobre orçamentos aprovados', icon: <PiggyBank className="h-4 w-4" />, tone: 'green' },
+        { label: 'Pendentes', value: String(d.pending), hint: `${d.quotes} orçamentos no total`, icon: <Clock className="h-4 w-4" />, tone: 'amber', to: '/orcamentos' },
+        { label: 'Obras em andamento', value: String(d.jobsRunning), hint: `${d.jobsDone} concluídas`, icon: <HardHat className="h-4 w-4" />, tone: 'gold', to: '/obras' },
+      ];
+
+  const maxStatus = Math.max(1, ...d.statusChart.map((x) => x.total));
 
   return (
-    <div className="animate-fade-in space-y-6">
-      <PageHeader title={`${greet}, ${user?.name.split(' ')[0]}`} subtitle="Visão geral da J&N Decorações em Gesso — dados atualizados em tempo real." />
-
-      {quick.length > 0 && (
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-5 sm:px-0">
-          {quick.map((q) => (
-            <button key={q.label} onClick={() => navigate(q.to)} className="card flex min-w-[140px] items-center gap-3 px-4 py-3 text-left text-sm font-medium transition hover:-translate-y-0.5 hover:shadow-lg">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gold-100 text-gold-700 dark:bg-gold-400/10 dark:text-gold-300">{q.icon}</span>
-              {q.label}
-            </button>
-          ))}
+    <div className="animate-fade-in space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            {greet}, <span className="text-gold-600 dark:text-gold-300">{user?.name.split(' ')[0]}</span>
+          </h1>
+          <p className="text-xs text-graphite-500 first-letter:uppercase">{today}</p>
         </div>
-      )}
+        {quick.length > 0 && (
+          <div className="-mx-4 flex max-w-[calc(100%+2rem)] gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:max-w-full sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
+            {quick.map((q) => (
+              <button
+                key={q.label}
+                onClick={() => navigate(q.to)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition hover:-translate-y-0.5 active:scale-95 ${
+                  q.primary
+                    ? 'bg-gradient-to-b from-gold-300 to-gold-500 text-navy-950 shadow-md'
+                    : 'border border-graphite-200 bg-white text-graphite-700 hover:border-gold-300 hover:text-gold-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-graphite-200 dark:hover:text-gold-300'
+                }`}
+              >
+                <Plus className="h-3 w-3 opacity-60" />
+                {q.icon}
+                {q.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {first && (
         <Card>
           <EmptyState
             icon={<Plus className="h-6 w-6" />}
             title="Comece configurando o sistema"
-            description="1) Preencha os dados da empresa em Configurações · 2) Cadastre produtos e serviços · 3) Cadastre clientes e faça o primeiro orçamento."
+            description="1) Preencha os dados da empresa em Configurações · 2) Cadastre serviços · 3) Cadastre clientes e faça o primeiro orçamento."
           />
         </Card>
       )}
 
-      <section>
-        <h2 className="mb-3 text-xs font-semibold tracking-wide text-graphite-500 uppercase">Comercial</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <StatCard label="Total de clientes" value={d.clients} icon={<Users className="h-4 w-4" />} hint={`${d.activeClients} ativos`} onClick={() => navigate('/clientes')} />
-          <StatCard label="Total de orçamentos" value={d.quotes} icon={<FileText className="h-4 w-4" />} onClick={() => navigate('/orcamentos')} />
-          <StatCard label="Pendentes" value={d.pending} icon={<Clock className="h-4 w-4" />} tone="amber" />
-          <StatCard label="Aprovados" value={d.approved} icon={<CheckCircle2 className="h-4 w-4" />} tone="green" />
-          <StatCard label="Recusados / expirados" value={`${d.refused} / ${d.expired}`} icon={<XCircle className="h-4 w-4" />} tone="red" />
-          <StatCard label="Obras em andamento" value={d.jobsRunning} icon={<HardHat className="h-4 w-4" />} tone="gold" onClick={() => navigate('/obras')} />
-          <StatCard label="Obras concluídas" value={d.jobsDone} icon={<CheckCircle2 className="h-4 w-4" />} tone="green" />
-          <StatCard label="Total vendido" value={formatBRL(d.sold)} icon={<TrendingUp className="h-4 w-4" />} tone="blue" hint="Orçamentos aprovados" />
-          <StatCard label="Lucro estimado" value={formatBRL(d.estimatedProfit)} icon={<PiggyBank className="h-4 w-4" />} tone="violet" hint="Sobre orçamentos aprovados" />
-          {showFin && <StatCard label="Total recebido" value={formatBRL(d.received)} icon={<ArrowDownCircle className="h-4 w-4" />} tone="green" onClick={() => navigate('/financeiro')} />}
-          {showFin && <StatCard label="A receber" value={formatBRL(d.toReceive)} icon={<Hourglass className="h-4 w-4" />} tone="amber" />}
-          {showFin && <StatCard label="Despesas" value={formatBRL(d.expenses)} icon={<Receipt className="h-4 w-4" />} tone="red" />}
-          {showFin && <StatCard label="Saldo financeiro" value={formatBRL(d.balance)} icon={<Wallet className="h-4 w-4" />} tone="gold" />}
-          {showFin && <StatCard label="Resultado (vendido − despesas)" value={formatBRL(d.sold - d.expenses)} icon={<CircleDollarSign className="h-4 w-4" />} />}
-        </div>
-      </section>
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {tiles.map(({ to, ...t }) => (
+          <Tile key={t.label} {...t} onClick={to ? () => navigate(to) : undefined} />
+        ))}
+      </div>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <ChartFrame title="Vendas por mês" subtitle="Orçamentos aprovados — últimos 12 meses" empty={!d.salesChart.some((x) => x.vendas)}>
-          <BarsChart data={d.salesChart} keys={[{ key: 'vendas', name: 'Vendas' }]} money />
-        </ChartFrame>
-        <ChartFrame title="Orçamentos por situação" empty={!d.quotes}>
-          <BarsChart data={d.statusChart} keys={[{ key: 'total', name: 'Orçamentos' }]} horizontal />
-        </ChartFrame>
-        {showFin && (
-          <ChartFrame title="Entradas e saídas" subtitle="Pagamentos confirmados — últimos 6 meses" empty={!d.cashChart.some((x) => x.entradas || x.saidas)}>
-            <BarsChart data={d.cashChart} keys={[{ key: 'entradas', name: 'Entradas' }, { key: 'saidas', name: 'Saídas' }]} money />
-          </ChartFrame>
-        )}
-        {showFin && (
-          <ChartFrame title="Evolução do faturamento" subtitle="Recebimentos acumulados — 12 meses" empty={!d.revenueEvolution.some((x) => x.acumulado)}>
-            <LinesChart data={d.revenueEvolution} keys={[{ key: 'acumulado', name: 'Faturamento acumulado' }]} money />
-          </ChartFrame>
-        )}
-        <ChartFrame title="Desempenho dos serviços" subtitle="Valor vendido por serviço (aprovados)" empty={!d.servicesChart.length}>
-          <BarsChart data={d.servicesChart} keys={[{ key: 'valor', name: 'Vendido' }]} money horizontal />
-        </ChartFrame>
-        <ChartFrame title="Clientes por cidade" empty={!d.clients}>
-          <BarsChart data={d.citiesChart} keys={[{ key: 'clientes', name: 'Clientes' }]} horizontal />
-        </ChartFrame>
-        <ChartFrame title="Obras por situação" empty={!(jobs ?? []).length}>
-          <BarsChart data={d.jobsChart} keys={[{ key: 'obras', name: 'Obras' }]} />
-        </ChartFrame>
-        <Card>
-          <CardHeader title="Atividades recentes" icon={<ActivityIcon className="h-4 w-4" />} />
-          {recent.length ? (
-            <ul className="max-h-[17rem] divide-y divide-graphite-100 overflow-y-auto dark:divide-white/5">
-              {recent.map((a) => (
-                <li key={a.id} className="flex items-start gap-3 px-5 py-2.5">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-gold-400" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm">{linkFor(a.entity, a.entityId) ? <Link to={linkFor(a.entity, a.entityId)!} className="hover:underline">{a.summary}</Link> : a.summary}</div>
-                    <div className="text-xs text-graphite-500">{a.userName} · {relativeTime(a.createdAt)}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Card className="flex flex-col p-4 lg:col-span-2">
+          <div className="mb-2 flex items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold">Vendas por mês</h2>
+            <span className="text-[11px] text-graphite-500">Orçamentos aprovados · 12 meses</span>
+          </div>
+          {d.salesChart.some((x) => x.vendas) ? (
+            <div className="h-52 lg:h-auto lg:min-h-[13rem] lg:flex-1">
+              <BarsChart data={d.salesChart} keys={[{ key: 'vendas', name: 'Vendas' }]} money />
+            </div>
           ) : (
-            <p className="p-5 text-sm text-graphite-500">Nenhuma atividade ainda.</p>
+            <div className="flex h-52 items-center justify-center text-sm text-graphite-500 lg:h-auto lg:min-h-[13rem] lg:flex-1">Nenhuma venda aprovada ainda.</div>
           )}
         </Card>
-      </section>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          <Card className="p-4">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-sm font-semibold">Orçamentos</h2>
+              <Link to="/orcamentos" className="text-[11px] text-gold-600 hover:underline dark:text-gold-300">
+                {d.quotes} no total →
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {d.statusChart.map((x) => (
+                <div key={x.key} className="flex items-center gap-2 text-xs">
+                  <span className="w-20 shrink-0 truncate text-graphite-500">{x.label}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-graphite-100 dark:bg-white/10">
+                    <div className={`h-full rounded-full ${BAR[x.key]}`} style={{ width: `${(x.total / maxStatus) * 100}%` }} />
+                  </div>
+                  <span className="tabular w-6 text-right font-semibold">{x.total}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+              <Link to="/clientes" className="flex items-center gap-1 rounded-full bg-graphite-100 px-2 py-0.5 text-graphite-600 hover:text-gold-700 dark:bg-white/5 dark:text-graphite-300">
+                <Users className="h-3 w-3" /> {d.clients} clientes
+              </Link>
+              <Link to="/obras" className="flex items-center gap-1 rounded-full bg-graphite-100 px-2 py-0.5 text-graphite-600 hover:text-gold-700 dark:bg-white/5 dark:text-graphite-300">
+                <HardHat className="h-3 w-3" /> {d.jobsRunning} em andamento · {d.jobsDone} concluídas
+              </Link>
+            </div>
+          </Card>
+
+          <Card className="p-4">
+            <div className="mb-2 flex items-center gap-1.5">
+              <ActivityIcon className="h-3.5 w-3.5 text-gold-500" />
+              <h2 className="text-sm font-semibold">Atividades recentes</h2>
+            </div>
+            {recent.length ? (
+              <ul className="space-y-1.5">
+                {recent.map((a) => {
+                  const to = linkFor(a.entity, a.entityId);
+                  return (
+                    <li key={a.id} className="flex items-start gap-2">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs">
+                          {to ? (
+                            <Link to={to} className="hover:underline">
+                              {a.summary}
+                            </Link>
+                          ) : (
+                            a.summary
+                          )}
+                        </div>
+                        <div className="text-[10px] text-graphite-500">
+                          {a.userName} · {relativeTime(a.createdAt)}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-xs text-graphite-500">Nenhuma atividade ainda.</p>
+            )}
+          </Card>
+        </div>
+      </div>
     </div>
+  );
+}
+
+const BAR: Record<string, string> = {
+  draft: 'bg-graphite-400',
+  pending: 'bg-gradient-to-r from-amber-300 to-amber-500',
+  approved: 'bg-gradient-to-r from-emerald-400 to-emerald-600',
+  refused: 'bg-gradient-to-r from-red-400 to-red-600',
+  expired: 'bg-graphite-300 dark:bg-graphite-500',
+};
+
+const TILE_TONE = {
+  navy: 'from-navy-800 to-navy-950 text-white',
+  green: 'from-emerald-500 to-emerald-700 text-white',
+  amber: 'from-amber-400 to-amber-600 text-white',
+  gold: 'from-gold-300 to-gold-500 text-navy-950',
+} as const;
+
+type TileProps = { label: string; value: string; hint?: string; icon: ReactNode; tone: keyof typeof TILE_TONE; to?: string };
+
+function Tile({ label, value, hint, icon, tone, onClick }: Omit<TileProps, 'to'> & { onClick?: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={`relative overflow-hidden rounded-2xl bg-gradient-to-br p-3.5 text-left shadow-md transition enabled:hover:-translate-y-0.5 enabled:hover:shadow-lg sm:p-4 ${TILE_TONE[tone]}`}
+    >
+      <span className="pointer-events-none absolute -top-6 -right-6 h-20 w-20 rounded-full bg-white/10" />
+      <div className="relative flex items-center justify-between gap-2">
+        <span className="truncate text-[11px] font-medium tracking-wide uppercase opacity-80">{label}</span>
+        <span className="shrink-0 rounded-lg bg-white/15 p-1.5">{icon}</span>
+      </div>
+      <div className="tabular relative mt-1.5 truncate text-lg font-bold sm:text-2xl">{value}</div>
+      {hint && <div className="relative mt-0.5 truncate text-[11px] opacity-75">{hint}</div>}
+    </button>
   );
 }
 
