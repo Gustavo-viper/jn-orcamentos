@@ -186,6 +186,8 @@ describe('portal do cliente', () => {
   });
   it('token inválido não revela nada', async () => {
     expect((await request(app).get(`/api/portal/${'a'.repeat(43)}`)).status).toBe(404);
+    expect((await request(app).get(`/api/portal/${'a'.repeat(43)}/status`)).status).toBe(404);
+    expect((await request(app).get(`/api/portal/${token}/status`)).body).toMatchObject({ ok: true, quoteId: ids.quote });
   });
   it('cliente aprova e o painel é atualizado', async () => {
     const d = await request(app).post(`/api/portal/${token}/decision`).send({ decision: 'approve', name: 'Cliente Teste', message: 'Pode começar' });

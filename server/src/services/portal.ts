@@ -21,6 +21,12 @@ async function findQuote(token: string) {
   return q;
 }
 
+/** Confirma se o link existe (uso interno do app — não registra visualização). */
+export async function portalStatus(token: string) {
+  const q = await findQuote(token);
+  return { ok: true, quoteId: q.id };
+}
+
 export async function portalView(token: string, ip: string, userAgent: string) {
   const q = await findQuote(token);
   const [client] = await db().select().from(s.clients).where(eq(s.clients.id, q.clientId));

@@ -12,7 +12,7 @@ import { authenticate, requireAdmin } from '../services/auth.js';
 import { addListener, listenerCount } from '../services/bus.js';
 import { lastSeq, pull, push, pushSchema } from '../services/sync.js';
 import { backupPath, createBackup, exportData, listBackups, readBackup, restoreMissing } from '../services/backup.js';
-import { portalComment, portalDecision, portalView } from '../services/portal.js';
+import { portalComment, portalDecision, portalStatus, portalView } from '../services/portal.js';
 import { mailConfigured } from '../services/mailer.js';
 import { logActivity } from '../services/audit.js';
 import { writeTx } from '../db/client.js';
@@ -138,6 +138,11 @@ export const portalRouter = Router();
 const portalLimiter = rateLimit({ windowMs: 60_000, limit: config.isTest ? 1000 : 60, standardHeaders: true, legacyHeaders: false, message: { error: 'Muitas requisições. Aguarde um instante.' } });
 portalRouter.use(portalLimiter);
 const meta = (req: Request) => ({ ip: req.ip ?? '', ua: String(req.headers['user-agent'] ?? '') });
+
+portalRouter.get('/:token/status', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await portalStatus(String(req.params.token)));
+});
 
 portalRouter.get('/:token', async (req, res) => {
   const m = meta(req);

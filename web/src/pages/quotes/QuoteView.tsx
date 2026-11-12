@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { QUOTE_STATUS_LABEL, formatJobNumber, formatQuoteNumber, quoteDisplayStatus, todayISO, type Quote } from '@jn/shared';
 import { getDb } from '../../lib/db';
+import { api, ApiError } from '../../lib/api';
+import { syncNow } from '../../lib/sync';
 import { deleteRecord, runCommand, useCompany, useRecord, useTable, useWhere } from '../../lib/data';
 import { useAuth, useSyncState } from '../../lib/auth';
 import { secureToken, uuid } from '../../lib/ids';
@@ -30,6 +32,18 @@ import { QuoteStatusBadge } from '../../lib/status';
 import { QuoteSummary } from '../../components/QuoteSummary';
 import { ChangeHistory } from '../../components/History';
 import { Button, Card, CardHeader, Checkbox, confirmDialog, EmptyState, Field, Input, LoadingBlock, Modal, PageHeader, Tabs, Textarea, toast } from '../../components/ui';
+
+type LinkState = 'checking' | 'active' | 'missing' | 'offline';
+
+/** Pergunta ao servidor se o link do portal existe (sem registrar visualização). */
+async function checkPortalToken(token: string): Promise<Exclude<LinkState, 'checking'>> {
+  try {
+    await api(`/portal/${token}/status`, { timeoutMs: 15_000 });
+    return 'active';
+  } catch (e) {
+    return e instanceof ApiError && e.status === 404 ? 'missing' : 'offline';
+  }
+}
 
 export default function QuoteView() {
   const { id } = useParams();
@@ -47,6 +61,27 @@ export default function QuoteView() {
   const [approveOpen, setApproveOpen] = useState(false);
   const [jobOpen, setJobOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [linkState, setLinkState] = useState<LinkState | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const currentToken = quote?.portalToken ?? null;
+
+  // confere no servidor se o link exibido está realmente ativo
+  useEffect(() => {
+    if (tab !== 'portal' || !currentToken) {
+      setLinkState(null);
+      return;
+    }
+    let stop = false;
+    setLinkState('checking');
+    void (async () => {
+      await syncNow().catch(() => undefined);
+      const st = await checkPortalToken(currentToken);
+      if (!stop) setLinkState(st);
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [tab, currentToken]);
 
   const activeJob = (jobs ?? []).find((j) => j.status !== 'cancelled');
   const receivables = (entries ?? []).filter((e) => e.status !== 'cancelled');
@@ -71,11 +106,43 @@ export default function QuoteView() {
     toast(`Orçamento ${QUOTE_STATUS_LABEL[next].toLowerCase()}.`);
   };
 
-  const ensurePortal = async (): Promise<string> => {
-    if (quote.portalToken) return `${location.origin}/portal/${quote.portalToken}`;
+  const createToken = async (): Promise<string> => {
     const token = secureToken();
     await runCommand('quote.portalLink', { quoteId: quote.id, token }, { targets: [quote.id], description: 'Gerar link do portal', optimistic: async () => void (await getDb().quotes.update(quote.id, { portalToken: token })) });
-    return `${location.origin}/portal/${token}`;
+    return token;
+  };
+
+  /**
+   * Garante um link que o servidor reconhece: sincroniza, confere e, se o link atual
+   * não existir no servidor (sincronização rejeitada, link antigo), gera um novo.
+   * Retorna null quando não foi possível ativar.
+   */
+  const ensurePortal = async (forceNew = false): Promise<string | null> => {
+    setLinkBusy(true);
+    try {
+      let token = !forceNew && quote.portalToken ? quote.portalToken : await createToken();
+      let created = token !== quote.portalToken;
+      await syncNow().catch(() => undefined);
+      let st = await checkPortalToken(token);
+      if (st === 'missing' && !created) {
+        token = await createToken();
+        created = true;
+        await syncNow().catch(() => undefined);
+        st = await checkPortalToken(token);
+      }
+      setLinkState(st);
+      if (st === 'missing') {
+        const failed = await getDb()
+          .outbox.filter((e) => e.status === 'error' && e.op.type === 'command' && e.op.name === 'quote.portalLink' && e.op.payload.token === token)
+          .first();
+        toast.error(`Não foi possível ativar o link do portal${failed?.error ? `: ${failed.error}` : '. Verifique a sincronização e tente novamente.'}`);
+        return null;
+      }
+      if (st === 'offline') toast('Sem conexão com o servidor: o link ficará ativo após a sincronização.');
+      return `${location.origin}/portal/${token}`;
+    } finally {
+      setLinkBusy(false);
+    }
   };
 
   const makePdf = async () => {
@@ -115,8 +182,22 @@ export default function QuoteView() {
 
   const copyLink = async () => {
     const link = await ensurePortal();
+    if (!link) return;
     await navigator.clipboard?.writeText(link).catch(() => undefined);
-    toast(quote.portalToken ? 'Link copiado.' : 'Link gerado e copiado. Ele fica ativo após a sincronização.');
+    toast('Link copiado.');
+  };
+  const openLink = async () => {
+    // abre a janela já no clique (evita bloqueio de pop-up) e só depois carrega o link conferido
+    const w = window.open('', '_blank');
+    if (w) w.opener = null;
+    const link = await ensurePortal();
+    if (link && w) w.location.href = link;
+    else if (link) window.open(link, '_blank', 'noopener');
+    else w?.close();
+  };
+  const regenerateLink = async () => {
+    const link = await ensurePortal(true);
+    if (link) toast('Novo link gerado. Envie-o novamente ao cliente.');
   };
   const revokeLink = async () => {
     if (!(await confirmDialog({ title: 'Revogar link do portal', message: 'O cliente não conseguirá mais acessar o link atual. Um novo link poderá ser gerado depois.', danger: true, confirmLabel: 'Revogar' }))) return;
@@ -280,6 +361,14 @@ export default function QuoteView() {
                     <>
                       <div className="font-medium">Link individual do cliente</div>
                       <div className="mt-1 truncate font-mono text-xs text-graphite-500">{portalUrl}</div>
+                      {linkState === 'checking' && <div className="mt-1 text-xs text-graphite-500">Verificando link…</div>}
+                      {linkState === 'active' && <div className="mt-1 text-xs font-medium text-emerald-600">● Link ativo</div>}
+                      {linkState === 'offline' && <div className="mt-1 text-xs text-amber-600">Sem conexão: não foi possível confirmar o link agora.</div>}
+                      {linkState === 'missing' && (
+                        <div className="mt-2 rounded-xl bg-red-50 p-3 text-xs text-red-700 dark:bg-red-400/10 dark:text-red-200">
+                          Este link não está ativo no servidor (o cliente verá “link inválido”). Gere um novo link e envie novamente.
+                        </div>
+                      )}
                     </>
                   ) : (
                     'Gere um link seguro para o cliente visualizar, baixar o PDF e aprovar ou recusar o orçamento.'
@@ -287,16 +376,19 @@ export default function QuoteView() {
                 </div>
                 {can('quotes', 'edit') && status !== 'draft' && (
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" icon={<Link2 className="h-4 w-4" />} onClick={copyLink}>
+                    <Button size="sm" icon={<Link2 className="h-4 w-4" />} onClick={copyLink} disabled={linkBusy}>
                       {portalUrl ? 'Copiar link' : 'Gerar link'}
                     </Button>
                     {portalUrl && (
                       <>
-                        <a href={portalUrl} target="_blank" rel="noreferrer">
-                          <Button size="sm" variant="outline" icon={<ExternalLink className="h-4 w-4" />}>
-                            Abrir
+                        <Button size="sm" variant="outline" icon={<ExternalLink className="h-4 w-4" />} onClick={openLink} disabled={linkBusy}>
+                          Abrir
+                        </Button>
+                        {linkState === 'missing' && (
+                          <Button size="sm" variant="outline" onClick={regenerateLink} disabled={linkBusy}>
+                            Gerar novo link
                           </Button>
-                        </a>
+                        )}
                         <Button size="sm" variant="ghost" onClick={revokeLink}>
                           Revogar
                         </Button>
