@@ -40,6 +40,7 @@ export async function loadCatalog(tx: Tx, serviceIds: string[]) {
       chargeUnit: x.chargeUnit,
       linearBasis: x.linearBasis,
       addons: (x.addons ?? []) as CalcService['addons'],
+      drywall: x.drywall,
       materials: mats
         .filter((m) => m.serviceId === x.id)
         .sort((a, b) => a.position - b.position)

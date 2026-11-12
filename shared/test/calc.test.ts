@@ -3,6 +3,7 @@ import {
   area,
   perimeter,
   platesNeeded,
+  isDrywallEnvironment,
   calculateQuote,
   splitInstallments,
   type CalcProduct,
@@ -301,5 +302,35 @@ describe('adicionais do serviço', () => {
     expect(e.addons[0]!.price).toBe(18000);
     expect(e.price).toBe(23000);
     expect(e.laborCost).toBe(0);
+  });
+});
+
+describe('placas de acartonado (1,80 x 1,20)', () => {
+  const svc = (over: Partial<CalcService>): CalcService => ({
+    id: 'serv-ac', name: 'Parede acartonado', measurementType: 'm2', pricingMode: 'cost_plus', laborPrice: 3000, chargeUnit: 'm²', linearBasis: 'perimeter', materials: [], ...over,
+  });
+  const run = (s: CalcService, width: number, length: number, wastePct = 0) =>
+    calculateQuote(quote({ environments: [env({ serviceId: s.id, width, length, wastePct })] }), [s], products).environments[0];
+
+  it('arredonda sempre para cima (6,94 → 7; 7,04 → 8)', () => {
+    const a = run(svc({ drywall: true }), 3, 5);
+    expect(a.measure).toBe(15);
+    expect(a.plates).toBe(7);
+    expect(a.drywall).toBe(true);
+    expect(run(svc({ drywall: true }), 4, 3.8).plates).toBe(8);
+  });
+  it('aplica o desperdício do ambiente', () => {
+    expect(run(svc({ drywall: true }), 3, 5, 10).plates).toBe(8); // 16,5 m² / 2,16 = 7,6
+  });
+  it('detecta pelo nome quando o campo não existe; desligado não calcula', () => {
+    expect(run(svc({ drywall: undefined, name: 'Teto em drywall' }), 3, 5).plates).toBe(7);
+    const off = run(svc({ drywall: false }), 3, 5);
+    expect(off.plates).toBe(0);
+    expect(off.drywall).toBe(false);
+  });
+  it('identifica ambientes de acartonado em orçamentos antigos', () => {
+    expect(isDrywallEnvironment({ serviceName: 'Forro acartonado', plates: 0 })).toBe(true);
+    expect(isDrywallEnvironment({ serviceName: 'Pintura', plates: 0 })).toBe(false);
+    expect(isDrywallEnvironment({ serviceName: 'Forro acartonado', plates: 5, drywall: false })).toBe(false);
   });
 });

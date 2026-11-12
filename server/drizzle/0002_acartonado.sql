@@ -1,0 +1,2 @@
+ALTER TABLE "services" ADD COLUMN "drywall" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+UPDATE "services" SET "drywall" = true WHERE "name" ILIKE '%acartonad%' OR "name" ILIKE '%drywall%' OR "name" ILIKE '%dry wall%';

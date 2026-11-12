@@ -97,6 +97,7 @@ export const serviceSchema = z.object({
   laborPrice: money,
   chargeUnit: str(20).min(1),
   linearBasis: z.enum(['perimeter', 'width', 'length']).default('perimeter'),
+  drywall: z.boolean().default(false),
   active: z.boolean().default(true),
   materials: z
     .array(z.object({ productId: idSchema, consumption: z.number().min(0).max(100_000) }))

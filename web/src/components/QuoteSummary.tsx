@@ -21,6 +21,7 @@ export function QuoteSummary({ calc, internal = true }: { calc: QuoteTotals; int
           ['Descontos', `${formatNumber(calc.deductedArea, 2)} m²`],
           ['Metro linear', `${formatNumber(calc.linearTotal, 2)} m`],
           ['Ambientes', `${calc.environments.length}`],
+          ...(calc.plates > 0 ? [['Placas acartonado', `${calc.plates} placa${calc.plates === 1 ? '' : 's'}`]] : []),
         ].map(([l, v]) => (
           <div key={l} className="rounded-xl bg-graphite-50 px-2.5 py-2 dark:bg-white/[0.04]">
             <div className="truncate text-[11px] text-graphite-500">{l}</div>

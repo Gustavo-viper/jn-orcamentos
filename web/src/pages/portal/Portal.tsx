@@ -123,7 +123,7 @@ export default function Portal() {
                   <div className="font-medium">{e.name}</div>
                   <div className="text-xs text-graphite-500">
                     {e.serviceName} ·{' '}
-                    {e.measurementType === 'm2' ? `${formatNumber(e.netArea, 2)} m²` : e.measurementType === 'ml' ? `${formatNumber(e.linear, 2)} m lineares` : `${formatNumber(e.quantity, 2)} ${e.chargeUnit}`}
+                    {e.measurementType === 'm2' ? `${formatNumber(e.netArea, 2)} m²${e.plates > 0 ? ` · ${e.plates} placa${e.plates === 1 ? '' : 's'}` : ''}` : e.measurementType === 'ml' ? `${formatNumber(e.linear, 2)} m lineares` : `${formatNumber(e.quantity, 2)} ${e.chargeUnit}`}
                   </div>
                 </div>
                 <div className="tabular font-semibold">{formatBRL(e.addons?.length ? (e.basePrice ?? e.price) : e.price)}</div>

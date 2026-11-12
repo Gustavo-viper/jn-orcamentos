@@ -20,6 +20,22 @@ export type DiscountType = 'none' | 'pct' | 'value';
 
 export const PLATE_CATEGORY = 'placas';
 
+/** Placa de acartonado (drywall) padrão: 1,80 m × 1,20 m. */
+export const DRYWALL_PLATE_HEIGHT = 1.8;
+export const DRYWALL_PLATE_WIDTH = 1.2;
+export const DRYWALL_PLATE_AREA = 2.16;
+const DRYWALL_NAME_RE = /acartonad|drywall|dry\s*wall/i;
+
+/** Serviço de acartonado: marcado no cadastro ou (cadastros antigos) identificado pelo nome. */
+/** Ambiente calculado de acartonado (orçamentos antigos: deduz pelo nome/placas). */
+export function isDrywallEnvironment(e: { serviceName: string; plates: number; drywall?: boolean | null }): boolean {
+  return e.drywall == null ? e.plates > 0 || DRYWALL_NAME_RE.test(e.serviceName) : e.drywall === true;
+}
+
+export function isDrywallService(s: { name: string; drywall?: boolean | null }): boolean {
+  return s.drywall == null ? DRYWALL_NAME_RE.test(s.name) : s.drywall === true;
+}
+
 export interface CalcProduct {
   id: string;
   name: string;
@@ -51,6 +67,8 @@ export interface CalcService {
   materials: CalcServiceMaterial[];
   /** adicionais/decorativos disponíveis para o serviço (ex.: tabica, elevação no forro) */
   addons?: ServiceAddon[];
+  /** serviço de acartonado: calcula placas de 1,80 × 1,20 m */
+  drywall?: boolean | null;
 }
 
 /** Adicional cadastrado no serviço (modelo). */
@@ -183,6 +201,8 @@ export interface EnvironmentResult {
   /** adicionais calculados (já incluídos em laborCost, cost, margin e price) */
   addons: AddonResult[];
   plates: number;
+  /** serviço de acartonado (entra no controle de material) */
+  drywall?: boolean;
   errors: string[];
 }
 
@@ -345,6 +365,10 @@ export function calculateEnvironment(
     const cost = cents(qty * p.unitCost);
     materials.push({ productId: p.id, name: p.name, unit: p.unit, isPlate: plate, rawQty, qty, unitCost: p.unitCost, cost });
   }
+  // Acartonado sem placa cadastrada como material: placas padrão 1,80 × 1,20 m, sempre arredondando para cima.
+  if (plates === 0 && service.measurementType === 'm2' && isDrywallService(service)) {
+    plates = platesNeeded(measure, wastePct, DRYWALL_PLATE_AREA);
+  }
   const materialCost = materials.reduce((s, m) => s + m.cost, 0);
 
   let laborCost = 0;
@@ -418,6 +442,7 @@ export function calculateEnvironment(
     basePrice,
     addons,
     plates,
+    drywall: isDrywallService(service),
   };
 }
 

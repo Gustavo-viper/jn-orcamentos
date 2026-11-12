@@ -235,6 +235,7 @@ export default function QuoteView() {
                         {r.measurementType === 'm2' && <Info label={r.serviceName} value={`${formatNumber(r.netArea, 2)} m²`} />}
                         {r.measurementType === 'ml' && <Info label={r.serviceName} value={`${formatNumber(r.linear, 2)} m`} />}
                         {r.measurementType === 'unit' && <Info label={r.serviceName} value={`${formatNumber(r.quantity, 2)} ${r.chargeUnit}`} />}
+                        {r.plates > 0 && <Info label="Placas (1,80×1,20)" value={`${r.plates} placa${r.plates === 1 ? '' : 's'}`} />}
                         {r.measurementType !== 'unit' && <Info label="Negativo" value={`${formatNumber(r.perimeter, 2)} m`} />}
                         <Info label={(r.addons ?? []).length ? 'Serviço principal' : 'Total do serviço'} value={formatBRL(r.pricingMode === 'fixed' ? (r.basePrice ?? r.price) : r.laborCost - (r.addons ?? []).reduce((s, a) => s + a.laborCost, 0))} />
                       </div>

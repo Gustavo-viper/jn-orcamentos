@@ -66,7 +66,7 @@ describe('cadastros e cálculo no servidor', () => {
     const res = await pushOps(admin, [
       op({ type: 'upsert', table: 'products', id: ids.placa, baseVersion: null, data: { name: 'Placa teste 1,20×1,80', category: 'placas', unit: 'un', unitCost: 3000, plateArea: 2.16, indivisible: true, minStock: 5 } }),
       op({ type: 'upsert', table: 'products', id: ids.massa, baseVersion: null, data: { name: 'Massa teste', category: 'massa', unit: 'kg', unitCost: 500, indivisible: false } }),
-      op({ type: 'upsert', table: 'services', id: ids.forro, baseVersion: null, data: { name: 'Forro teste', measurementType: 'm2', laborPrice: 4000, chargeUnit: 'm²', materials: [{ productId: ids.placa, consumption: 1 }, { productId: ids.massa, consumption: 0.5 }] } }),
+      op({ type: 'upsert', table: 'services', id: ids.forro, baseVersion: null, data: { name: 'Forro teste', drywall: true, measurementType: 'm2', laborPrice: 4000, chargeUnit: 'm²', materials: [{ productId: ids.placa, consumption: 1 }, { productId: ids.massa, consumption: 0.5 }] } }),
       op({ type: 'upsert', table: 'clients', id: ids.client, baseVersion: null, data: { name: 'Cliente Teste', document: '529.982.247-25', city: 'Cidade Teste', state: 'SP', whatsapp: '11999990000' } }),
     ]);
     expect(res.map((r) => r.error ?? 'ok')).toEqual(['ok', 'ok', 'ok', 'ok']);

@@ -208,7 +208,7 @@ export async function buildQuotePdf(q: QuotePdfInput, client: ClientLike | null,
   const envRows: RowInput[] = [];
   q.calc.environments.forEach((r, i) => {
     const e = q.environments.find((x) => x.id === r.envId) ?? q.environments[i];
-    const measure = r.measurementType === 'm2' ? `${formatNumber(r.netArea, 2)} m²` : r.measurementType === 'ml' ? `${formatNumber(r.linear, 2)} m` : `${formatNumber(r.quantity, 2)} ${r.chargeUnit}`;
+    const measure = r.measurementType === 'm2' ? `${formatNumber(r.netArea, 2)} m²${r.plates > 0 ? ` (${r.plates} placa${r.plates === 1 ? '' : 's'})` : ''}` : r.measurementType === 'ml' ? `${formatNumber(r.linear, 2)} m` : `${formatNumber(r.quantity, 2)} ${r.chargeUnit}`;
     const addons = r.addons ?? [];
     envRows.push([t(`${r.name}`), t(`${r.serviceName}`), t(measure), formatBRL(addons.length ? (r.basePrice ?? r.price) : r.price)]);
     for (const a of addons) {
@@ -233,7 +233,7 @@ export async function buildQuotePdf(q: QuotePdfInput, client: ClientLike | null,
   y = ensureSpace(doc, y, 12);
   doc.setFontSize(8.5);
   doc.setTextColor(...GRAY);
-  const meas = [q.calc.netArea > 0 && `Medida total ${formatNumber(q.calc.netArea, 2)} m²`, q.calc.linearTotal > 0 && `Metro linear ${formatNumber(q.calc.linearTotal, 2)} m`].filter(Boolean).join('   |   ');
+  const meas = [q.calc.netArea > 0 && `Medida total ${formatNumber(q.calc.netArea, 2)} m²`, q.calc.linearTotal > 0 && `Metro linear ${formatNumber(q.calc.linearTotal, 2)} m`, q.calc.plates > 0 && `Placas acartonado (1,80 x 1,20): ${q.calc.plates}`].filter(Boolean).join('   |   ');
   if (meas) doc.text(t(meas), 14, y);
   doc.setTextColor(30, 32, 40);
   y += 9;

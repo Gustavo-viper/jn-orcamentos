@@ -4,6 +4,9 @@ import {
   LINEAR_BASIS_LABEL,
   MEASUREMENT_LABEL,
   PRICING_MODE_LABEL,
+  DRYWALL_PLATE_HEIGHT,
+  DRYWALL_PLATE_WIDTH,
+  isDrywallService,
   isPlate,
   serviceSchema,
   type LinearBasis,
@@ -23,7 +26,7 @@ import { Badge, Button, Card, confirmDialog, EmptyState, Field, Input, LoadingBl
 
 type Form = Omit<Service, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'version' | 'seq'>;
 const UNIT_FOR: Record<MeasurementType, string> = { m2: 'm²', ml: 'm', unit: 'un' };
-const EMPTY: Form = { name: '', description: '', measurementType: 'm2', pricingMode: 'cost_plus', laborPrice: 0, chargeUnit: 'm²', linearBasis: 'perimeter', materials: [], addons: [], active: true };
+const EMPTY: Form = { name: '', description: '', measurementType: 'm2', pricingMode: 'cost_plus', laborPrice: 0, chargeUnit: 'm²', linearBasis: 'perimeter', materials: [], addons: [], drywall: false, active: true };
 
 export default function Services() {
   const services = useTable('services');
@@ -103,7 +106,7 @@ function ServiceModal({ service, onClose }: { service: Service | null; onClose: 
   const readOnly = service ? !can('services', 'edit') : !can('services', 'create');
 
   useEffect(() => {
-    setF(service ? { name: service.name, description: service.description, measurementType: service.measurementType, pricingMode: service.pricingMode, laborPrice: service.laborPrice, chargeUnit: service.chargeUnit, linearBasis: service.linearBasis, materials: service.materials.map((m) => ({ ...m })), addons: (service.addons ?? []).map((a) => ({ ...a })), active: service.active } : EMPTY);
+    setF(service ? { name: service.name, description: service.description, measurementType: service.measurementType, pricingMode: service.pricingMode, laborPrice: service.laborPrice, chargeUnit: service.chargeUnit, linearBasis: service.linearBasis, materials: service.materials.map((m) => ({ ...m })), addons: (service.addons ?? []).map((a) => ({ ...a })), drywall: service.drywall ?? isDrywallService(service), active: service.active } : EMPTY);
   }, [service]);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((p) => ({ ...p, [k]: v }));
@@ -168,14 +171,17 @@ function ServiceModal({ service, onClose }: { service: Service | null; onClose: 
     >
       {service && <Tabs className="mb-4" value={tab} onChange={setTab} tabs={[{ value: 'data', label: 'Dados' }, { value: 'history', label: <span className="inline-flex items-center gap-1.5"><History className="h-3.5 w-3.5" /> Histórico</span> }]} />}
       {tab === 'history' && service ? (
-        <ChangeHistory entity="services" id={service.id} labels={{ name: 'Nome', laborPrice: 'Preço (centavos)', measurementType: 'Medição', pricingMode: 'Precificação', active: 'Ativo', materials: 'Materiais', addons: 'Adicionais', chargeUnit: 'Unidade' }} />
+        <ChangeHistory entity="services" id={service.id} labels={{ name: 'Nome', laborPrice: 'Preço (centavos)', measurementType: 'Medição', pricingMode: 'Precificação', active: 'Ativo', materials: 'Materiais', addons: 'Adicionais', chargeUnit: 'Unidade', drywall: 'Acartonado' }} />
       ) : (
         <fieldset disabled={readOnly} className="grid grid-cols-1 gap-4 sm:grid-cols-6">
           <Field className="sm:col-span-4" label="Nome do serviço" required error={errors.name}>
-            <Input value={f.name} onChange={(e) => set('name', e.target.value)} autoFocus placeholder="Ex.: Forro de drywall" />
+            <Input value={f.name} onChange={(e) => { const name = e.target.value; setF((p) => ({ ...p, name, drywall: !service && !p.drywall && isDrywallService({ name, drywall: null }) ? true : p.drywall })); }} autoFocus placeholder="Ex.: Forro de drywall" />
           </Field>
           <Field className="flex items-end sm:col-span-2" label="">
             <Toggle checked={f.active} onChange={(v) => set('active', v)} label={f.active ? 'Ativo' : 'Inativo'} />
+          </Field>
+          <Field className="sm:col-span-6" label="" hint={f.drywall ? `Calcula as placas de ${DRYWALL_PLATE_HEIGHT.toFixed(2).replace('.', ',')} × ${DRYWALL_PLATE_WIDTH.toFixed(2).replace('.', ',')} m (sempre arredondando para cima) e entra no controle de material.` : 'Marque para serviços de parede ou teto acartonado (drywall).'}>
+            <Toggle checked={!!f.drywall} onChange={(v) => set('drywall', v)} label="Serviço de acartonado (calcular placas)" />
           </Field>
           <Field className="sm:col-span-6" label="Descrição">
             <Textarea value={f.description} onChange={(e) => set('description', e.target.value)} placeholder="Aparece no orçamento enviado ao cliente." />

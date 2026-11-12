@@ -702,7 +702,7 @@ function EnvironmentCard({
             {type === 'ml' && <span>{svc.name} = <b>{formatNumber(result.linear, 2)} m</b></span>}
             {type === 'unit' && <span>{svc.name} = <b>{formatNumber(result.quantity, 2)} {svc.chargeUnit}</b></span>}
             {type !== 'unit' && <span>Negativo: <b>{formatNumber(result.perimeter, 2)} m</b></span>}
-            {result.plates > 0 && <span>Placas: <b>{result.plates}</b></span>}
+            {result.plates > 0 && <span>Placas (1,80×1,20): <b>{result.plates} placa{result.plates === 1 ? '' : 's'}</b></span>}
             <span>{result.addons.length ? 'Serviço principal' : 'Total do serviço'}: <b>{formatBRL(result.pricingMode === 'fixed' ? result.basePrice : result.laborCost - addonsLabor)}</b></span>
             {result.addons.map((a) => (
               <span key={a.id}>+ {a.name || 'Adicional'} ({formatNumber(a.measure, 2)} {a.chargeUnit}): <b>{formatBRL(result.pricingMode === 'fixed' ? a.price : a.laborCost)}</b></span>

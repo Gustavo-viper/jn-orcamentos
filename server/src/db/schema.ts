@@ -185,6 +185,8 @@ export const services = pgTable(
     linearBasis: text({ enum: ['perimeter', 'width', 'length'] }).notNull().default('perimeter'),
     /** adicionais/decorativos (ServiceAddon[]) */
     addons: jsonb().notNull().default([]),
+    /** serviço de acartonado: calcula placas e entra no controle de material */
+    drywall: boolean().notNull().default(false),
     active: boolean().notNull().default(true),
   },
   (t) => [index('services_seq_idx').on(t.seq)],

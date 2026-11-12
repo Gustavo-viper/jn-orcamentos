@@ -8,6 +8,9 @@ import {
   formatJobNumber,
   formatQuoteNumber,
   idSchema,
+  isDrywallEnvironment,
+  DRYWALL_PLATE_AREA,
+  PLATE_CATEGORY,
   roundTo,
   stockMoveSchema,
   type JobEventType,
@@ -18,6 +21,7 @@ import {
 import * as s from '../db/schema.js';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { newId } from '../lib/ids.js';
+import type { Tx } from '../db/client.js';
 import { logActivity, logChange } from './audit.js';
 import { bump, nextNumber, requirePerm, touch, type Ctx } from './context.js';
 import { rawOne } from './records.js';
@@ -93,6 +97,36 @@ const fromQuoteSchema = z.object({
   notes: z.string().max(5000).default(''),
 });
 
+/**
+ * Controle de material: só entra material de acartonado (drywall).
+ * Soma os materiais dos ambientes de acartonado e, quando o serviço não tem
+ * produto-placa vinculado, usa o produto de placa cadastrado (1,80 x 1,20) para as placas calculadas.
+ */
+async function drywallMaterials(tx: Tx, calc: QuoteTotals): Promise<JobMaterial[]> {
+  const envs = calc.environments.filter((e) => isDrywallEnvironment(e));
+  const byId = new Map<string, JobMaterial>();
+  const add = (productId: string, name: string, unit: string, qty: number) => {
+    const cur = byId.get(productId);
+    if (cur) cur.plannedQty = roundTo(cur.plannedQty + qty, 3);
+    else byId.set(productId, { productId, name, unit, plannedQty: roundTo(qty, 3), consumedQty: 0 });
+  };
+  let uncoveredPlates = 0;
+  for (const e of envs) {
+    for (const m of e.materials ?? []) add(m.productId, m.name, m.unit, m.qty);
+    if ((e.plates ?? 0) > 0 && !(e.materials ?? []).some((m) => m.isPlate)) uncoveredPlates += e.plates;
+  }
+  if (uncoveredPlates > 0) {
+    const plates = await tx
+      .select({ id: s.products.id, name: s.products.name, unit: s.products.unit, plateArea: s.products.plateArea })
+      .from(s.products)
+      .where(and(eq(s.products.category, PLATE_CATEGORY), eq(s.products.active, true), isNull(s.products.deletedAt)));
+    plates.sort((a, b) => Math.abs((a.plateArea ?? 0) - DRYWALL_PLATE_AREA) - Math.abs((b.plateArea ?? 0) - DRYWALL_PLATE_AREA));
+    const plate = plates[0];
+    if (plate) add(plate.id, plate.name, plate.unit, uncoveredPlates);
+  }
+  return [...byId.values()];
+}
+
 export async function jobFromQuote(ctx: Ctx, payload: unknown) {
   requirePerm(ctx, 'jobs', 'create');
   const p = parse(fromQuoteSchema, payload);
@@ -119,7 +153,7 @@ export async function jobFromQuote(ctx: Ctx, payload: unknown) {
   const summary = calc.environments
     .map((e) => `${e.name}: ${e.serviceName} — ${e.measure} ${e.chargeUnit}`)
     .join('\n');
-  const materials: JobMaterial[] = calc.materials.map((m) => ({ productId: m.productId, name: m.name, unit: m.unit, plannedQty: m.qty, consumedQty: 0 }));
+  const materials = await drywallMaterials(tx, calc);
   const number = await nextNumber(tx, 'job');
   const status: JobStatus = p.startDate ? 'scheduled' : 'waiting';
   await tx.insert(s.jobs).values({

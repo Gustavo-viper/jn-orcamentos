@@ -138,6 +138,8 @@ export interface Service extends BaseRecord {
   materials: ServiceMaterial[];
   /** adicionais/decorativos do serviço */
   addons?: ServiceAddon[];
+  /** serviço de acartonado (parede ou teto): calcula placas e entra no controle de material */
+  drywall?: boolean;
   active: boolean;
 }
 
