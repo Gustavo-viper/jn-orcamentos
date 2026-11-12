@@ -21,7 +21,7 @@ import { useTable } from '../lib/data';
 import { useAuth } from '../lib/auth';
 import { formatBRL, isoToLocalDate, relativeTime } from '../lib/format';
 import { BarsChart, lastMonths, monthLabel } from '../components/Charts';
-import { Card, EmptyState, LoadingBlock } from '../components/ui';
+import { Card, LoadingBlock } from '../components/ui';
 
 const STATUS_KEYS = ['draft', 'pending', 'approved', 'refused', 'expired'] as const;
 
@@ -113,7 +113,7 @@ export default function Dashboard() {
   const maxStatus = Math.max(1, ...d.statusChart.map((x) => x.total));
 
   return (
-    <div className="animate-fade-in space-y-4">
+    <div className="animate-fade-in space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
@@ -143,13 +143,17 @@ export default function Dashboard() {
       </div>
 
       {first && (
-        <Card>
-          <EmptyState
-            icon={<Plus className="h-6 w-6" />}
-            title="Comece configurando o sistema"
-            description="1) Preencha os dados da empresa em Configurações · 2) Cadastre serviços · 3) Cadastre clientes e faça o primeiro orçamento."
-          />
-        </Card>
+        <Link
+          to="/configuracoes"
+          className="flex items-center gap-3 rounded-2xl border border-gold-200 bg-gold-50/70 px-4 py-2.5 text-xs text-graphite-700 transition hover:border-gold-300 dark:border-gold-500/20 dark:bg-gold-500/5 dark:text-graphite-200"
+        >
+          <span className="shrink-0 rounded-lg bg-gold-400/20 p-1.5 text-gold-700 dark:text-gold-300">
+            <Plus className="h-4 w-4" />
+          </span>
+          <span className="min-w-0">
+            <b className="font-semibold">Comece configurando o sistema:</b> 1) dados da empresa em Configurações · 2) cadastre serviços · 3) cadastre clientes e faça o primeiro orçamento.
+          </span>
+        </Link>
       )}
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -165,23 +169,23 @@ export default function Dashboard() {
             <span className="text-[11px] text-graphite-500">Orçamentos aprovados · 12 meses</span>
           </div>
           {d.salesChart.some((x) => x.vendas) ? (
-            <div className="h-52 lg:h-auto lg:min-h-[13rem] lg:flex-1">
+            <div className="h-44 lg:h-auto lg:min-h-[11rem] lg:flex-1">
               <BarsChart data={d.salesChart} keys={[{ key: 'vendas', name: 'Vendas' }]} money />
             </div>
           ) : (
-            <div className="flex h-52 items-center justify-center text-sm text-graphite-500 lg:h-auto lg:min-h-[13rem] lg:flex-1">Nenhuma venda aprovada ainda.</div>
+            <div className="flex h-44 items-center justify-center text-sm text-graphite-500 lg:h-auto lg:min-h-[11rem] lg:flex-1">Nenhuma venda aprovada ainda.</div>
           )}
         </Card>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-          <Card className="p-4">
-            <div className="mb-3 flex items-baseline justify-between">
+          <Card className="p-3.5">
+            <div className="mb-2 flex items-baseline justify-between">
               <h2 className="text-sm font-semibold">Orçamentos</h2>
               <Link to="/orcamentos" className="text-[11px] text-gold-600 hover:underline dark:text-gold-300">
                 {d.quotes} no total →
               </Link>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {d.statusChart.map((x) => (
                 <div key={x.key} className="flex items-center gap-2 text-xs">
                   <span className="w-20 shrink-0 truncate text-graphite-500">{x.label}</span>
@@ -192,7 +196,7 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-            <div className="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+            <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px]">
               <Link to="/clientes" className="flex items-center gap-1 rounded-full bg-graphite-100 px-2 py-0.5 text-graphite-600 hover:text-gold-700 dark:bg-white/5 dark:text-graphite-300">
                 <Users className="h-3 w-3" /> {d.clients} clientes
               </Link>
@@ -202,32 +206,28 @@ export default function Dashboard() {
             </div>
           </Card>
 
-          <Card className="p-4">
+          <Card className="p-3.5">
             <div className="mb-2 flex items-center gap-1.5">
               <ActivityIcon className="h-3.5 w-3.5 text-gold-500" />
               <h2 className="text-sm font-semibold">Atividades recentes</h2>
             </div>
             {recent.length ? (
-              <ul className="space-y-1.5">
+              <ul className="space-y-1">
                 {recent.map((a) => {
                   const to = linkFor(a.entity, a.entityId);
                   return (
-                    <li key={a.id} className="flex items-start gap-2">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs">
-                          {to ? (
-                            <Link to={to} className="hover:underline">
-                              {a.summary}
-                            </Link>
-                          ) : (
-                            a.summary
-                          )}
-                        </div>
-                        <div className="text-[10px] text-graphite-500">
-                          {a.userName} · {relativeTime(a.createdAt)}
-                        </div>
-                      </div>
+                    <li key={a.id} className="flex items-center gap-2 text-xs">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {to ? (
+                          <Link to={to} className="hover:underline">
+                            {a.summary}
+                          </Link>
+                        ) : (
+                          a.summary
+                        )}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-graphite-500">{relativeTime(a.createdAt)}</span>
                     </li>
                   );
                 })}

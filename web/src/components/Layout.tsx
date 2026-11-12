@@ -131,7 +131,7 @@ export function Layout() {
   const mobileMain: NavItem[] = [NAV[0], NAV[1], NAV[3]].filter((n) => !n.module || can(n.module));
 
   return (
-    <div className="min-h-dvh lg:pl-64">
+    <div className="flow-root min-h-dvh lg:pl-64">
       {/* Menu lateral (desktop) */}
       <aside className="glass-navy glass-rim fixed inset-y-3 left-3 z-30 hidden w-[14.75rem] flex-col overflow-hidden rounded-[28px] lg:flex">
         <div className="px-5 pt-5 pb-3">
